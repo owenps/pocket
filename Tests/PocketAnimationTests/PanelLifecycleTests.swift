@@ -66,6 +66,61 @@ struct PanelLifecycleTests {
         }
     }
 
+    @Test(arguments: [false, true])
+    func shortcutOpensRefocusesAndClosesWhileFocusLossHonorsPreference(keepOpen: Bool) async throws {
+        try await NativeUITestSupport.withDesktop {
+            let app = NSApplication.shared
+            let name = "PanelFocusTests.\(UUID().uuidString)"
+            let defaults = try #require(UserDefaults(suiteName: name))
+            defer { defaults.removePersistentDomain(forName: name) }
+            let state = PanelState(
+                conversation: ConversationSession(backend: DemoAssistantBackend(), defaults: defaults),
+                defaults: defaults
+            )
+            state.keepOpenWhenUnfocused = keepOpen
+            state.conversation.draft = "Keep this draft"
+            let existingWindows = Set(app.windows.map(ObjectIdentifier.init))
+            let controller = PanelController(state: state)
+            controller.start()
+            let window = try #require(app.windows.first { !existingWindows.contains(ObjectIdentifier($0)) })
+            let other = NSWindow(
+                contentRect: CGRect(x: 100, y: 100, width: 200, height: 100),
+                styleMask: [.titled], backing: .buffered, defer: false
+            )
+            other.isReleasedWhenClosed = false
+            defer {
+                controller.collapse()
+                controller.stop()
+                window.orderOut(nil)
+                window.contentView = nil
+                window.close()
+                other.close()
+            }
+
+            controller.toggle()
+            try NativeUITestSupport.wait { state.isExpanded && window.isKeyWindow }
+            other.makeKeyAndOrderFront(nil)
+            try NativeUITestSupport.wait { other.isKeyWindow && !window.isKeyWindow }
+            #expect(state.isExpanded == keepOpen)
+            #expect(window.isVisible)
+            #expect(state.conversation.draft == "Keep this draft")
+
+            controller.toggle()
+            try NativeUITestSupport.wait {
+                state.isExpanded && window.isKeyWindow && window.firstResponder is DraftTextView
+            }
+            #expect(state.conversation.draft == "Keep this draft")
+            controller.toggle()
+            #expect(!state.isExpanded)
+
+            controller.toggle()
+            try NativeUITestSupport.wait { state.isExpanded && window.isKeyWindow }
+            window.cancelOperation(nil)
+            #expect(!state.isExpanded)
+            #expect(state.conversation.draft == "Keep this draft")
+        }
+    }
+
     private func draftEditor(in view: NSView) -> DraftTextView? {
         if let editor = view as? DraftTextView { return editor }
         return view.subviews.lazy.compactMap { draftEditor(in: $0) }.first

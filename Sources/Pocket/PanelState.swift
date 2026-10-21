@@ -30,6 +30,10 @@ final class PanelState {
         didSet { defaults.set(userName, forKey: "userName") }
     }
 
+    var keepOpenWhenUnfocused: Bool {
+        didSet { defaults.set(keepOpenWhenUnfocused, forKey: "keepOpenWhenUnfocused") }
+    }
+
     var showBuddy: Bool {
         didSet { defaults.set(showBuddy, forKey: "showBuddy") }
     }
@@ -155,6 +159,7 @@ final class PanelState {
         let initialFontSize = min(Self.fontSizeRange.upperBound, max(Self.fontSizeRange.lowerBound, fontSize))
         storedFontSize = initialFontSize
         userName = defaults.string(forKey: "userName") ?? ""
+        keepOpenWhenUnfocused = defaults.bool(forKey: "keepOpenWhenUnfocused")
         showBuddy = defaults.object(forKey: "showBuddy") as? Bool ?? true
         avatar = defaults.data(forKey: "avatarAppearance")
             .flatMap { try? JSONDecoder().decode(AvatarAppearance.self, from: $0) } ?? AvatarAppearance()

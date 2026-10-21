@@ -28,6 +28,22 @@ struct SettingsTests {
         }
     }
 
+    @Test func keepOpenToggleEditsPreferenceAndTracksLiveChanges() throws {
+        try withState { state in
+            try withSettings(state: state) { host, _ in
+                @MainActor func toggle() -> NativeAccessibility? {
+                    NativeAccessibility(host).descendant(identifier: "keepOpenWhenUnfocused")
+                }
+                try waitForLayout(host) { toggle()?.boolValue == false }
+                let control = try #require(toggle())
+                control.press()
+                try waitForLayout(host) { state.keepOpenWhenUnfocused && toggle()?.boolValue == true }
+                state.keepOpenWhenUnfocused = false
+                try waitForLayout(host) { toggle()?.boolValue == false }
+            }
+        }
+    }
+
     @Test func settingsDisplaysSavedShortcutAndTracksLiveChanges() throws {
         try withState { state in
             state.shortcut = .optionSpace
@@ -113,6 +129,27 @@ struct SettingsTests {
         }
     }
 
+    @Test func compactSettingsKeepEveryGeneralControlVisible() throws {
+        try withState { state in
+            state.fontSize = PanelState.fontSizeRange.upperBound
+            try withSettings(state: state) { host, window in
+                window.setContentSize(CGSize(width: 480, height: 600))
+                let identifiers = ["userName", "launchAtLogin", "keepOpenWhenUnfocused", "fontSize", "fontPreview"]
+                try waitForLayout(host) {
+                    NativeAccessibility(host).descendant(identifier: "fontPreview")?.frame.isEmpty == false
+                }
+                let visibleFrame = window.convertToScreen(host.convert(host.bounds, to: nil))
+                for identifier in identifiers {
+                    let control = try #require(NativeAccessibility(host).descendant(identifier: identifier))
+                    #expect(visibleFrame.contains(control.frame), "\(identifier) should be fully visible")
+                }
+                let button = try #require(recorder(in: host))
+                let buttonFrame = window.convertToScreen(button.convert(button.bounds, to: nil))
+                #expect(!buttonFrame.isEmpty && visibleFrame.contains(buttonFrame))
+            }
+        }
+    }
+
     @Test func minimumSettingsWidthProvidesTheTestedPreviewWidth() throws {
         try withState { state in
             state.fontSize = PanelState.fontSizeRange.upperBound
@@ -174,7 +211,7 @@ struct SettingsTests {
             recordingChanged: recordingChanged
         ))
         let window = OffscreenTestWindow(
-            contentRect: CGRect(x: 0, y: 0, width: 520, height: 720),
+            contentRect: CGRect(x: 0, y: 0, width: 520, height: 600),
             styleMask: [.titled, .closable], backing: .buffered, defer: true
         )
         window.contentView = host

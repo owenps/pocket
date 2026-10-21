@@ -69,7 +69,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     }
 
     func toggle() {
-        if state.isExpanded { collapse() } else { show() }
+        if state.isExpanded && panel.isKeyWindow { collapse() } else { show() }
     }
 
     func show() {
@@ -95,7 +95,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        collapse()
+        if !state.keepOpenWhenUnfocused { collapse() }
     }
 
     private func submitDraft() -> Bool {

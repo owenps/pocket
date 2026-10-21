@@ -17,6 +17,11 @@ public struct NativeAccessibility {
     }
 
     public var identifier: String? { value("accessibilityIdentifier") as? String }
+    public var boolValue: Bool? { (value("accessibilityValue") as? NSNumber)?.boolValue }
+
+    public func press() {
+        _ = (object as? any NSAccessibilityProtocol)?.accessibilityPerformPress()
+    }
 
     public var frame: CGRect {
         (object as? any NSAccessibilityElementProtocol)?.accessibilityFrame() ?? .zero

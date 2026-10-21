@@ -13,7 +13,7 @@ final class SettingsWindowController: NSWindowController {
     ) {
         self.loginItem = loginItem
         let window = NSWindow(
-            contentRect: CGRect(x: 0, y: 0, width: 520, height: 720),
+            contentRect: CGRect(x: 0, y: 0, width: 520, height: 600),
             styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false

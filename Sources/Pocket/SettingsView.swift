@@ -27,11 +27,7 @@ struct SettingsView: View {
             Section {
                 TextField("Name", text: $state.userName, prompt: Text(""))
                     .accessibilityIdentifier("userName")
-            } footer: {
-                Text("Used to personalize greetings.")
-            }
-
-            Section {
+                    .help("Used to personalize greetings.")
                 Toggle("Launch at login", isOn: Binding(
                     get: { loginItem.isEnabled || loginItem.requiresApproval },
                     set: { loginItem.setEnabled($0) }
@@ -51,17 +47,18 @@ struct SettingsView: View {
 
             Section {
                 HStack {
-                    Text("Show or hide Pocket")
+                    Text("Keyboard shortcut")
                     Spacer()
                     ShortcutRecorder(shortcut: state.shortcut, onChange: changeShortcut,
                                      onRecordingChanged: recordingChanged)
                         .frame(width: 160)
+                        .help("Use ⌘, ⌃ or ⌥ with any key, or a function key.")
                 }
-            } header: {
-                Text("Keyboard Shortcut")
+                Toggle("Keep open when switching apps", isOn: $state.keepOpenWhenUnfocused)
+                    .accessibilityIdentifier("keepOpenWhenUnfocused")
             } footer: {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Click to record. Use ⌘, ⌃ or ⌥ with any key, or a function key. Escape cancels.")
+                    Text("Click to record. Escape cancels.")
                     if let error = state.shortcutError {
                         Text(error)
                             .foregroundStyle(.red)
