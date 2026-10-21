@@ -40,6 +40,7 @@ final class ConversationSession {
             switch command {
             case .new: reset()
             case .stop: stopReply()
+            case .settings: return false // Presentation owns the Settings window.
             }
             draft = ""
             return true

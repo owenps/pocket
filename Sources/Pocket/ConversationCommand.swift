@@ -3,11 +3,13 @@ import Foundation
 enum ConversationCommand: String, CaseIterable {
     case new = "/new"
     case stop = "/stop"
+    case settings = "/settings"
 
     var summary: String {
         switch self {
         case .new: "start a new conversation"
         case .stop: "interrupt the response"
+        case .settings: "open settings"
         }
     }
 

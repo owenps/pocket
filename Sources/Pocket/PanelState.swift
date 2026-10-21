@@ -12,6 +12,7 @@ enum ConversationPresentation: Equatable {
 final class PanelState {
     let conversation: ConversationSession
     @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let openSettings: (() -> Void)?
 
     static let defaultFontSize = Double(NSFont.preferredFont(forTextStyle: .body).pointSize)
     static let fontSizeRange = 11.0...24.0
@@ -142,9 +143,13 @@ final class PanelState {
         }
     }
 
-    init(conversation: ConversationSession, defaults: UserDefaults = .standard) {
+    init(
+        conversation: ConversationSession, defaults: UserDefaults = .standard,
+        openSettings: (() -> Void)? = nil
+    ) {
         self.conversation = conversation
         self.defaults = defaults
+        self.openSettings = openSettings
         let savedFontSize = (defaults.object(forKey: "fontSize") as? NSNumber)?.doubleValue
         let fontSize = savedFontSize.flatMap { $0.isFinite ? $0 : nil } ?? Self.defaultFontSize
         let initialFontSize = min(Self.fontSizeRange.upperBound, max(Self.fontSizeRange.lowerBound, fontSize))
@@ -204,13 +209,19 @@ final class PanelState {
 
     @discardableResult
     func submitDraft() -> Bool {
-        if let selectedCommand { conversation.draft = selectedCommand.rawValue }
-        let command = ConversationCommand(rawValue: conversation.draft.trimmingCharacters(in: .whitespacesAndNewlines))
-        guard conversation.submitDraft() else { return false }
+        let command = selectedCommand
+            ?? ConversationCommand(rawValue: conversation.draft.trimmingCharacters(in: .whitespacesAndNewlines))
+        if command == .settings {
+            guard openSettings != nil else { return false }
+            conversation.draft = ""
+        } else {
+            if let command { conversation.draft = command.rawValue }
+            guard conversation.submitDraft() else { return false }
+        }
         switch command {
         case .new:
             resetPresentation()
-        case .stop:
+        case .stop, .settings:
             break
         case nil:
             if conversationPresentation != .thread { naturalTranscriptHeight = 0 }
@@ -219,6 +230,7 @@ final class PanelState {
         commandSelection = nil
         dismissedCommandDraft = nil
         editorHeight = DraftEditor.singleLineHeight(fontSize: fontSize)
+        if command == .settings { openSettings?() }
         return true
     }
 

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct CommandSuggestionsView: View {
@@ -8,6 +9,13 @@ struct CommandSuggestionsView: View {
     let select: (ConversationCommand) -> Void
     @Environment(\.colorSchemeContrast) private var contrast
 
+    private var commandColumnWidth: CGFloat {
+        let font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        return ConversationCommand.allCases.map {
+            ($0.rawValue as NSString).size(withAttributes: [.font: font]).width
+        }.max() ?? 0
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ForEach(commands, id: \.self) { command in
@@ -15,7 +23,8 @@ struct CommandSuggestionsView: View {
                     HStack(spacing: 8) {
                         Text(command.rawValue)
                             .monospaced()
-                            .frame(width: fontSize * 3.5, alignment: .leading)
+                            .frame(width: commandColumnWidth, alignment: .leading)
+                            .lineLimit(1)
                         Text(command.summary)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)

@@ -9,10 +9,11 @@ struct ConversationCommandTests {
         for draft in ["", " \t\n ", "Hello", "Use /new", "hello /stop"] {
             #expect(ConversationCommand.suggestions(for: draft) == nil)
         }
-        #expect(ConversationCommand.suggestions(for: " / \n") == [.new, .stop])
+        #expect(ConversationCommand.suggestions(for: " / \n") == [.new, .stop, .settings])
         #expect(ConversationCommand.suggestions(for: "\n/n\t") == [.new])
         #expect(ConversationCommand.suggestions(for: "/new") == [.new])
-        #expect(ConversationCommand.suggestions(for: "/s") == [.stop])
+        #expect(ConversationCommand.suggestions(for: "/s") == [.stop, .settings])
+        #expect(ConversationCommand.suggestions(for: "/se") == [.settings])
         #expect(ConversationCommand.suggestions(for: " /stop ") == [.stop])
         for draft in ["/clear", "/help", "/NEW", "/new now", "/stop now"] {
             #expect(ConversationCommand.suggestions(for: draft) == [])
@@ -235,9 +236,11 @@ struct ConversationCommandTests {
             #expect(state.moveCommandSelection(by: 1))
             #expect(state.selectedCommand == .stop)
             #expect(state.moveCommandSelection(by: 1))
+            #expect(state.selectedCommand == .settings)
+            #expect(state.moveCommandSelection(by: 1))
             #expect(state.selectedCommand == .new)
             #expect(state.moveCommandSelection(by: -1))
-            #expect(state.selectedCommand == .stop)
+            #expect(state.selectedCommand == .settings)
             state.updateDraft("/n")
             #expect(state.selectedCommand == .new)
             #expect(state.moveCommandSelection(by: -1))
@@ -297,7 +300,7 @@ struct ConversationCommandTests {
             state.naturalTranscriptHeight = 240
             #expect(state.topContentHeight == 240)
             let messages = state.presentedMessages
-            for (draft, suggestions) in [("/", [ConversationCommand.new, .stop]), ("/n", [.new])] {
+            for (draft, suggestions) in [("/", [ConversationCommand.new, .stop, .settings]), ("/n", [.new])] {
                 state.updateDraft(draft)
                 #expect(state.commandSuggestions == suggestions)
                 #expect(state.commandHeight == CGFloat(suggestions.count) * state.commandRowHeight + 6)

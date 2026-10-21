@@ -24,7 +24,7 @@ stays anchored to the top edge; content emerges beneath it.
 
 - Capture comes first. Fresh openings show the composer, or the latest unread reply.
 - Sending reveals history. Closing never cancels work or discards the conversation.
-- `/new` starts fresh; `/stop` interrupts without losing history.
+- `/new` starts fresh; `/stop` interrupts without losing history; `/settings` opens Settings.
 - `/` suggests commands above the prompt without hiding history. Arrows select, Tab completes and dismisses, Return runs, Escape dismisses.
 - Control-C clears only the draft; Command-C remains native copy.
 - Mark a completed reply read only when fully revealed, foreground, and viewed to its end.

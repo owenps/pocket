@@ -148,18 +148,18 @@ struct PanelView: View {
                 }
                 .frame(height: layout.composerHeight, alignment: .center)
 
-                if !conversation.messages.isEmpty {
-                    Button("Stop") { conversation.stopReply() }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .buttonStyle(.plain)
-                        .frame(width: 36, height: min(24, layout.composerHeight))
-                        .opacity(conversation.isBusy ? 1 : 0)
-                        .disabled(!conversation.isBusy)
-                        .accessibilityHidden(!conversation.isBusy)
-                        .keyboardShortcut(".", modifiers: .command)
-                        .help("Stop simulated reply (⌘.)")
-                }
+                Button("Stop") { conversation.stopReply() }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .buttonStyle(.plain)
+                    .frame(width: 36, height: min(24, layout.composerHeight))
+                    .opacity(conversation.isBusy ? 1 : 0)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: conversation.isBusy)
+                    .disabled(!conversation.isBusy)
+                    .accessibilityHidden(!conversation.isBusy)
+                    .accessibilityIdentifier("stop-reply")
+                    .keyboardShortcut(".", modifiers: .command)
+                    .help("Stop simulated reply (⌘.)")
             }
             .frame(height: layout.composerHeight, alignment: .top)
 

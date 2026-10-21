@@ -17,7 +17,10 @@ enum PocketApp {
 @MainActor
 private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private let conversation = ConversationSession(backend: DemoAssistantBackend())
-    private lazy var state = PanelState(conversation: conversation)
+    private lazy var state = PanelState(
+        conversation: conversation,
+        openSettings: { [weak self] in self?.openSettings() }
+    )
     private lazy var panel = PanelController(state: state)
     private let loginItem = LoginItemSettings()
     private lazy var settings = SettingsWindowController(

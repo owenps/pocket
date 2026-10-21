@@ -65,6 +65,35 @@ struct PanelViewTests {
         }
     }
 
+    @Test func tabCompletesHighlightedSettingsAndReturnOpensSettings() async throws {
+        NativeAccessibility.enable()
+        var settingsOpened = 0
+        try await withPanel(openSettings: { settingsOpened += 1 }) { state, window, host in
+            state.transcriptHeight = 0
+            state.transcriptGap = 0
+            state.openPanel()
+            try await waitForLayout(host) { window.firstResponder is NSTextView }
+            let editor = try #require(window.firstResponder as? NSTextView)
+            let accessibility = NativeAccessibility(host)
+            editor.insertText("/", replacementRange: editor.selectedRange())
+            try await waitForLayout(host) { accessibility.descendant(identifier: "command-settings") != nil }
+            try press(125, in: window)
+            try press(125, in: window)
+            try await waitForLayout(host) {
+                accessibility.descendant(identifier: "command-settings")?.text.contains("Selected") == true
+            }
+            try press(48, in: window)
+            try await waitForLayout(host) { editor.string == "/settings" && state.commandSuggestions == nil }
+            #expect(settingsOpened == 0)
+            #expect(window.firstResponder === editor)
+            #expect(state.conversation.messages.isEmpty)
+            try press(36, in: window)
+            try await waitForLayout(host) { settingsOpened == 1 && editor.string.isEmpty }
+            #expect(state.conversation.messages.isEmpty)
+            #expect(!state.conversation.isBusy)
+        }
+    }
+
     @Test func escapeDismissesSuggestionsAndFurtherTypingReopensWithoutWarnings() async throws {
         NativeAccessibility.enable()
         try await withPanel { state, window, host in
@@ -414,10 +443,11 @@ struct PanelViewTests {
 
     private func withPanel(
         backend: ControlledAssistantBackend? = nil,
+        openSettings: (() -> Void)? = nil,
         _ body: @MainActor (PanelState, OffscreenTestWindow, NSView) async throws -> Void
     ) async throws {
         try await withConversationFixture(backend: backend ?? ControlledAssistantBackend()) { conversation, _, defaults in
-            let state = PanelState(conversation: conversation, defaults: defaults)
+            let state = PanelState(conversation: conversation, defaults: defaults, openSettings: openSettings)
             state.expandedSize = CGSize(width: 460, height: 210)
             state.surfaceRect = CGRect(origin: .zero, size: state.expandedSize)
             state.transcriptHeight = 112
