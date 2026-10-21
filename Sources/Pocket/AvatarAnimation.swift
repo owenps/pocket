@@ -30,7 +30,7 @@ struct AvatarAnimation {
     private var speakingStartedAt: TimeInterval = 0
     private static let mouths: [AvatarRenderer.Mouth] = [.small, .resting, .small, .open, .small, .resting]
 
-    init(blinkInterval: ClosedRange<TimeInterval> = 8...15) {
+    init(blinkInterval: ClosedRange<TimeInterval> = 4...8) {
         self.blinkInterval = blinkInterval
     }
 

@@ -17,7 +17,7 @@ struct AvatarAnimationTests {
         var animation = AvatarAnimation()
         animation.update(behavior: .idle, at: 20)
         let deadline = try #require(animation.nextDeadline)
-        #expect((28...35).contains(deadline))
+        #expect((24...28).contains(deadline))
         animation.update(behavior: .idle, at: 21)
         #expect(animation.nextDeadline == deadline)
     }

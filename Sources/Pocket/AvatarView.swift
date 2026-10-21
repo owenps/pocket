@@ -6,7 +6,7 @@ struct AvatarView: View {
     let appearance: AvatarAppearance
     var size: CGFloat? = nil
     var behavior: AvatarAnimation.Behavior = .inactive
-    var idleBlinkInterval: ClosedRange<TimeInterval> = 8...15
+    var idleBlinkInterval: ClosedRange<TimeInterval> = 4...8
 
     var body: some View {
         AvatarImage(appearance: appearance, behavior: behavior,
@@ -52,7 +52,7 @@ private final class AvatarCanvas: NSView {
     private var previewActive = false
     private var hasBeenAttached = false
     private var windowClosed = false
-    private var idleBlinkInterval: ClosedRange<TimeInterval> = 8...15
+    private var idleBlinkInterval: ClosedRange<TimeInterval> = 4...8
     private var timer: Timer?
     private var scheduledDeadline: TimeInterval?
     private var displayLink: CADisplayLink?
