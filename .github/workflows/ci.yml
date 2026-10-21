@@ -2,7 +2,13 @@ name: macOS
 
 on:
   push:
+    paths-ignore:
+      - README.md
+      - docs/**
   pull_request:
+    paths-ignore:
+      - README.md
+      - docs/**
 
 permissions:
   contents: read
@@ -16,7 +22,9 @@ jobs:
       - name: Toolchain
         run: swift --version
       - name: Unit tests
-        run: ./scripts/test.sh --filter PocketTests
+        run: ./scripts/test.sh --filter PocketTests --skip PanelViewTests
+      - name: Hosted panel layout tests
+        run: ./scripts/test.sh --skip-build --filter PanelViewTests --no-parallel
       - name: Animation and desktop integration tests
         env:
           POCKET_DESKTOP_TESTS: "1"

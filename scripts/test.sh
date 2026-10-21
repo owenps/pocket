@@ -16,9 +16,11 @@ if [[ "$DEVELOPER_PATH" == */CommandLineTools && -d "$FRAMEWORKS/Testing.framewo
         -Xlinker -rpath -Xlinker "$TEST_LIBS")
 fi
 
-# Report fast failures first; don't interleave native clocks with the unit suite.
+# Isolate hosted layout waits from bitmap-heavy unit tests.
+# Native animation clocks also run separately and serially.
 if [[ $# -eq 0 ]]; then
-    "${SWIFT_TEST[@]}" --filter PocketTests
+    "${SWIFT_TEST[@]}" --filter PocketTests --skip PanelViewTests
+    "${SWIFT_TEST[@]}" --skip-build --filter PanelViewTests --no-parallel
     exec "${SWIFT_TEST[@]}" --skip-build --filter PocketAnimationTests --no-parallel
 fi
 
