@@ -112,7 +112,7 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     private func updateEditorHeight(_ height: CGFloat) {
         guard height.isFinite else { return }
-        let height = min(DraftEditor.maximumHeight, max(0, height))
+        let height = IslandGeometry.editorViewportHeight(height)
         guard abs(state.editorHeight - height) >= 0.5 else { return }
         state.editorHeight = height
     }
@@ -175,10 +175,10 @@ final class PanelController: NSObject, NSWindowDelegate {
         if state.isExpanded || expandedLayout == nil {
             expandedLayout = geometry.expandedLayout(
                 composerHeight: state.composerHeight,
+                editorHeight: state.editorHeight,
                 naturalTranscriptHeight: state.presentedMessages.isEmpty ? 0 : state.naturalTranscriptHeight,
                 includesError: state.shortcutError != nil
             )
-            expandedLayout?.editorHeight = state.editorHeight
         }
         guard let expandedLayout else { return }
         if seedHiddenContent {
@@ -216,6 +216,8 @@ final class PanelController: NSObject, NSWindowDelegate {
     private func render(elapsed: TimeInterval = 0) {
         guard let geometry, let expandedLayout else { return }
         let sample = motion.layout
+        let body = IslandGeometry.bodyLayout(sample: sample, notchHeight: state.notchHeight,
+                                             includesError: state.shortcutError != nil)
         let widthRange = expandedLayout.size.width - geometry.collapsedSize.width
         var transaction = Transaction(animation: nil)
         transaction.disablesAnimations = true
@@ -224,12 +226,11 @@ final class PanelController: NSObject, NSWindowDelegate {
                 ? (sample.size.width - geometry.collapsedSize.width) / widthRange
                 : (state.isExpanded ? 1 : 0)
             state.expandedSize = expandedLayout.size
-            state.displayedEditorHeight = min(DraftEditor.maximumHeight, max(0, sample.editorHeight))
-            state.displayedComposerHeight = max(0, sample.composerHeight)
-            state.transcriptHeight = min(112, max(0, sample.transcriptHeight))
-            state.transcriptGap = min(10, max(0, sample.transcriptGap))
-            state.contentHeight = state.notchHeight + 28 + state.displayedComposerHeight
-                + state.transcriptHeight + state.transcriptGap + (state.shortcutError == nil ? 0 : 48)
+            state.displayedEditorHeight = body.editorHeight
+            state.displayedComposerHeight = body.composerHeight
+            state.transcriptHeight = body.transcriptHeight
+            state.transcriptGap = body.transcriptGap
+            state.contentHeight = body.height
             let frame = IslandFrame(surface: geometry.frame(size: sample.size))
             // AppKit rounds window bounds outward to whole points. Paint the
             // fractional surface inside those tight bounds instead of stretching

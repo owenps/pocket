@@ -46,7 +46,7 @@ struct PanelView: View {
                 .blur(radius: reduceMotion ? 0 : 3 * (1 - contentVisibility))
                 .opacity(contentVisibility)
                 .mask(alignment: .top) {
-                    Rectangle().padding(.top, state.notchHeight + 8)
+                    Rectangle().padding(.top, state.bodyLayout.maskTopInset)
                 }
                 .allowsHitTesting(state.isExpanded && contentVisibility > 0.5)
                 .accessibilityHidden(!state.isExpanded)
@@ -76,11 +76,12 @@ struct PanelView: View {
 
     private var composer: some View {
         @Bindable var conversation = state.conversation
+        let layout = state.bodyLayout
         let entrance = BuddyEntranceMotion.pose(at: state.buddyEntranceProgress, reduceMotion: reduceMotion)
         return VStack(alignment: .leading, spacing: 0) {
             // Mount at zero height too: native measurement must be able to seed
             // a new viewport without reserving an empty conversation area.
-            if !state.presentedMessages.isEmpty || state.transcriptHeight > 0 || state.transcriptGap > 0 {
+            if !state.presentedMessages.isEmpty || layout.transcriptHeight > 0 || layout.transcriptGap > 0 {
                 ConversationView(
                     messages: state.presentedMessages,
                     phase: conversation.replyPhase,
@@ -92,8 +93,8 @@ struct PanelView: View {
                     onContentHeightChanged: transcriptHeightChanged,
                     fontSize: state.fontSize
                 )
-                .frame(height: state.transcriptHeight)
-                .padding(.bottom, state.transcriptGap)
+                .frame(height: layout.transcriptHeight)
+                .padding(.bottom, layout.transcriptGap)
                 .id(state.conversationPresentation == .unread)
             }
 
@@ -115,7 +116,7 @@ struct PanelView: View {
                     fontSize: state.fontSize,
                     userName: state.userName
                 )
-                .frame(height: min(state.displayedEditorHeight, state.displayedComposerHeight))
+                .frame(height: layout.editorFrameHeight)
                 .overlay {
                     if contrast == .increased {
                         RoundedRectangle(cornerRadius: 6)
@@ -124,14 +125,14 @@ struct PanelView: View {
                             .allowsHitTesting(false)
                     }
                 }
-                .frame(height: state.displayedComposerHeight, alignment: .center)
+                .frame(height: layout.composerHeight, alignment: .center)
 
                 if !conversation.messages.isEmpty {
                     Button("Stop") { conversation.stopReply() }
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .buttonStyle(.plain)
-                        .frame(width: 36, height: min(24, state.displayedComposerHeight))
+                        .frame(width: 36, height: min(24, layout.composerHeight))
                         .opacity(conversation.isBusy ? 1 : 0)
                         .disabled(!conversation.isBusy)
                         .accessibilityHidden(!conversation.isBusy)
@@ -139,18 +140,18 @@ struct PanelView: View {
                         .help("Stop simulated reply (⌘.)")
                 }
             }
-            .frame(height: state.displayedComposerHeight, alignment: .top)
+            .frame(height: layout.composerHeight, alignment: .top)
 
             if let error = state.shortcutError {
                 Text(error)
                     .font(.caption)
                     .foregroundStyle(.orange)
-                    .frame(height: 38, alignment: .topLeading)
-                    .padding(.top, 10)
+                    .frame(height: layout.errorHeight, alignment: .topLeading)
+                    .padding(.top, layout.errorTopGap)
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, state.notchHeight + 12)
-        .padding(.bottom, 16)
+        .padding(.horizontal, layout.horizontalInset)
+        .padding(.top, layout.topInset)
+        .padding(.bottom, layout.bottomInset)
     }
 }

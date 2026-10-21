@@ -329,7 +329,7 @@ private struct PanelTestContent: View {
             // Apply final allocations without running the spring/window controller.
             state.displayedEditorHeight = state.editorHeight
             state.displayedComposerHeight = state.composerHeight
-            state.contentHeight = state.composerHeight + 28 + state.transcriptHeight + state.transcriptGap
+            state.contentHeight = state.bodyLayout.height
         }
     }
 }

@@ -3,6 +3,64 @@ import Foundation
 
 /// Screen-space points, never backing pixels. Expansion preserves the top anchor.
 struct IslandGeometry {
+    static let preferredExpandedWidth: CGFloat = 460
+    static let maximumEditorHeight: CGFloat = 140
+    private static let maximumTranscriptHeight: CGFloat = 112
+    private static let maximumTranscriptGap: CGFloat = 10
+
+    struct BodyLayout {
+        let horizontalInset: CGFloat
+        let topInset: CGFloat
+        let bottomInset: CGFloat
+        let maskTopInset: CGFloat
+        let errorHeight: CGFloat
+        let errorTopGap: CGFloat
+        let editorHeight: CGFloat
+        let composerHeight: CGFloat
+        let transcriptHeight: CGFloat
+        let transcriptGap: CGFloat
+
+        var editorFrameHeight: CGFloat { min(editorHeight, composerHeight) }
+        var height: CGFloat {
+            topInset + bottomInset + errorHeight + errorTopGap
+                + composerHeight + transcriptHeight + transcriptGap
+        }
+
+        fileprivate init(
+            composerHeight: CGFloat, editorHeight: CGFloat = 0,
+            transcriptHeight: CGFloat = 0, transcriptGap: CGFloat = 0,
+            notchHeight: CGFloat, includesError: Bool
+        ) {
+            horizontalInset = 24
+            topInset = notchHeight + 12
+            bottomInset = 16
+            maskTopInset = notchHeight + 8
+            errorHeight = includesError ? 38 : 0
+            errorTopGap = includesError ? 10 : 0
+            self.editorHeight = editorHeight
+            self.composerHeight = composerHeight
+            self.transcriptHeight = transcriptHeight
+            self.transcriptGap = transcriptGap
+        }
+    }
+
+    static func editorViewportHeight(_ height: CGFloat) -> CGFloat {
+        min(maximumEditorHeight, max(0, height))
+    }
+
+    /// Resolve sampled allocations without changing the spring or its outer size.
+    static func bodyLayout(
+        sample: IslandLayout, notchHeight: CGFloat = 0, includesError: Bool = false
+    ) -> BodyLayout {
+        BodyLayout(
+            composerHeight: max(0, sample.composerHeight),
+            editorHeight: editorViewportHeight(sample.editorHeight),
+            transcriptHeight: min(maximumTranscriptHeight, max(0, sample.transcriptHeight)),
+            transcriptGap: min(maximumTranscriptGap, max(0, sample.transcriptGap)),
+            notchHeight: notchHeight, includesError: includesError
+        )
+    }
+
     let screenFrame: CGRect
     let notchHeight: CGFloat
     let notchWidth: CGFloat
@@ -40,24 +98,35 @@ struct IslandGeometry {
     func expandedSize(
         composerHeight: CGFloat, transcriptHeight: CGFloat = 0, includesError: Bool = false
     ) -> CGSize {
-        let history = transcriptHeight > 0 ? transcriptHeight + 10 : 0
+        // Explicit transcript allocations remain uncapped for existing frame callers.
+        let body = BodyLayout(
+            composerHeight: composerHeight,
+            transcriptHeight: transcriptHeight > 0 ? transcriptHeight : 0,
+            transcriptGap: transcriptHeight > 0 ? Self.maximumTranscriptGap : 0,
+            notchHeight: notchHeight, includesError: includesError
+        )
         return CGSize(
-            width: min(max(460, collapsedSize.width), screenFrame.width),
-            // Composer and top/bottom padding only: no titlebar or status footer.
-            height: min(composerHeight + 28 + notchHeight + history + (includesError ? 48 : 0), screenFrame.height)
+            width: min(max(Self.preferredExpandedWidth, collapsedSize.width), screenFrame.width),
+            height: min(body.height, screenFrame.height)
         )
     }
 
     func expandedLayout(
-        composerHeight: CGFloat, naturalTranscriptHeight: CGFloat = 0, includesError: Bool = false
+        composerHeight: CGFloat, editorHeight: CGFloat = 0,
+        naturalTranscriptHeight: CGFloat = 0, includesError: Bool = false
     ) -> IslandLayout {
         let composer = composerHeight.isFinite ? max(0, composerHeight) : 0
+        let editor = editorHeight.isFinite ? Self.editorViewportHeight(editorHeight) : 0
         let natural = naturalTranscriptHeight.isFinite ? max(0, naturalTranscriptHeight) : 0
         let baseHeight = expandedSize(composerHeight: composer, includesError: includesError).height
-        let transcript = min(112, natural, max(0, screenFrame.height - baseHeight - 10))
+        let transcript = min(
+            Self.maximumTranscriptHeight, natural,
+            max(0, screenFrame.height - baseHeight - Self.maximumTranscriptGap)
+        )
         return IslandLayout(
             size: expandedSize(composerHeight: composer, transcriptHeight: transcript, includesError: includesError),
-            composerHeight: composer, transcriptHeight: transcript, transcriptGap: transcript > 0 ? 10 : 0
+            composerHeight: composer, editorHeight: editor, transcriptHeight: transcript,
+            transcriptGap: transcript > 0 ? Self.maximumTranscriptGap : 0
         )
     }
 

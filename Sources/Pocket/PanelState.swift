@@ -61,13 +61,22 @@ final class PanelState {
 
     var naturalTranscriptHeight: CGFloat = 0
     var transcriptGap: CGFloat = 0
-    var contentHeight: CGFloat = 88
-    var expandedSize = CGSize(width: 460, height: 88)
+    var contentHeight: CGFloat = 0
+    var expandedSize = CGSize(width: IslandGeometry.preferredExpandedWidth, height: 0)
     var collapsedSize = CGSize(width: 96, height: 24)
     var notchHeight: CGFloat = 0
     var transcriptHeight: CGFloat = 0
     var transcriptFocusRequest = 0
     private(set) var conversationPresentation: ConversationPresentation = .capture
+
+    var bodyLayout: IslandGeometry.BodyLayout {
+        IslandGeometry.bodyLayout(
+            sample: IslandLayout(size: surfaceRect.size, composerHeight: displayedComposerHeight,
+                                 editorHeight: displayedEditorHeight, transcriptHeight: transcriptHeight,
+                                 transcriptGap: transcriptGap),
+            notchHeight: notchHeight, includesError: shortcutError != nil
+        )
+    }
 
     var presentedMessages: [ConversationMessage] {
         switch conversationPresentation {
@@ -95,7 +104,7 @@ final class PanelState {
         displayedEditorHeight = initialEditorHeight
         displayedComposerHeight = initialEditorHeight
         displayedComposerHeight = composerHeight
-        contentHeight = displayedComposerHeight + 28
+        contentHeight = bodyLayout.height
         expandedSize.height = contentHeight
     }
 

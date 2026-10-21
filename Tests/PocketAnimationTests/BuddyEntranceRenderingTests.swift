@@ -22,7 +22,7 @@ struct BuddyEntranceRenderingTests {
         state.showBuddy = true
         state.transcriptHeight = 0
         state.transcriptGap = 0
-        state.contentHeight = state.displayedComposerHeight + 28
+        state.contentHeight = state.bodyLayout.height
         state.expandedSize = CGSize(width: 460, height: state.contentHeight)
         state.surfaceRect = CGRect(origin: .zero, size: state.expandedSize)
         state.buddyEntranceProgress = 0

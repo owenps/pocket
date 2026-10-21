@@ -14,7 +14,7 @@ struct DraftEditor: NSViewRepresentable {
     var userName = ""
 
     static let minimumHeight = singleLineHeight(fontSize: Double(NSFont.preferredFont(forTextStyle: .body).pointSize))
-    static let maximumHeight: CGFloat = 140
+    static let maximumHeight = IslandGeometry.maximumEditorHeight
 
     static func singleLineHeight(fontSize: Double) -> CGFloat {
         let body = NSFont.preferredFont(forTextStyle: .body)
@@ -231,7 +231,7 @@ final class DraftEditorScrollView: NSScrollView {
     }
 
     private static func viewportHeight(_ contentHeight: CGFloat) -> CGFloat {
-        min(DraftEditor.maximumHeight, max(0, contentHeight))
+        IslandGeometry.editorViewportHeight(contentHeight)
     }
 
     func cancelHeightReport() {
