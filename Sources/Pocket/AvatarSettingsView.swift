@@ -16,10 +16,6 @@ struct AvatarSettingsView: View {
             }
         } header: {
             Text("Buddy")
-        } footer: {
-            if !showBuddy {
-                Text("Your buddy is hidden. Your customization is kept.")
-            }
         }
         .pickerStyle(.menu)
         .onChange(of: appearance) { _, _ in

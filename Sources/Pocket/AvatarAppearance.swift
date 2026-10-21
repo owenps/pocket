@@ -27,8 +27,8 @@ struct AvatarAppearance: Codable, Equatable, Sendable {
             switch self {
             case .beanie: "Beanie"
             case .none: "None"
-            case .cap: "Trail cap"
-            case .sprout: "Little sprout"
+            case .cap: "Cap"
+            case .sprout: "Sprout"
             case .antenna: "Antenna"
             case .mushroom: "Mushroom"
             case .bandana: "Bandana"
@@ -42,12 +42,12 @@ struct AvatarAppearance: Codable, Equatable, Sendable {
         case dots, wide, glasses, mellow, happy, dashes
         var title: String {
             switch self {
-            case .dots: "Dot eyes"
-            case .wide: "Wide-eyed"
+            case .dots: "Dot"
+            case .wide: "Wide"
             case .glasses: "Glasses"
             case .mellow: "Mellow"
-            case .happy: "Happy arches"
-            case .dashes: "Soft dashes"
+            case .happy: "Happy"
+            case .dashes: "Dash"
             }
         }
     }

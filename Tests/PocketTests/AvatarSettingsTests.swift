@@ -16,7 +16,7 @@ struct AvatarSettingsTests {
             state.avatar.face = .glasses
             try waitForLayout(host) {
                 swatch(.glacier, in: host)?.state == .on
-                    && popup("Little sprout", in: host) != nil && popup("Glasses", in: host) != nil
+                    && popup("Sprout", in: host) != nil && popup("Glasses", in: host) != nil
             }
             #expect(swatch(.campfire, in: host)?.state == .off)
             #expect(swatch(.glacier, in: host)?.isAccessibilitySelected() == true)
@@ -49,14 +49,14 @@ struct AvatarSettingsTests {
             state.avatar.size = .large
             state.conversation.draft = "Keep my choices"
             let hats: [(AvatarAppearance.Headwear, String)] = [
-                (.beanie, "Beanie"), (.none, "None"), (.cap, "Trail cap"),
-                (.sprout, "Little sprout"), (.antenna, "Antenna"),
+                (.beanie, "Beanie"), (.none, "None"), (.cap, "Cap"),
+                (.sprout, "Sprout"), (.antenna, "Antenna"),
                 (.mushroom, "Mushroom"), (.bandana, "Bandana"), (.orbit, "Orbit"), (.pebbles, "Pebbles"),
             ]
             let faces: [(AvatarAppearance.Face, String)] = [
-                (.dots, "Dot eyes"), (.wide, "Wide-eyed"),
+                (.dots, "Dot"), (.wide, "Wide"),
                 (.glasses, "Glasses"), (.mellow, "Mellow"),
-                (.happy, "Happy arches"), (.dashes, "Soft dashes"),
+                (.happy, "Happy"), (.dashes, "Dash"),
             ]
             for (headwear, title) in hats {
                 let retainedFace = state.avatar.face
@@ -101,7 +101,7 @@ struct AvatarSettingsTests {
             try waitForLayout(host) { AvatarAppearance.Palette.allCases.allSatisfy { swatch($0, in: host) == nil } }
             #expect(state.avatar == appearance)
             state.showBuddy = true
-            try waitForLayout(host) { swatch(.lilac, in: host)?.state == .on && popup("Little sprout", in: host) != nil }
+            try waitForLayout(host) { swatch(.lilac, in: host)?.state == .on && popup("Sprout", in: host) != nil }
             #expect(state.avatar == appearance)
         }
     }
