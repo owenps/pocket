@@ -1,0 +1,25 @@
+name: macOS
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Unit tests
+        run: ./scripts/test.sh --filter PocketTests
+      - name: Animation and desktop integration tests
+        env:
+          POCKET_DESKTOP_TESTS: "1"
+        run: ./scripts/test.sh --filter PocketAnimationTests --no-parallel
+      - name: Build app bundle
+        run: ./scripts/build-app.sh
