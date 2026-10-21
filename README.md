@@ -17,10 +17,13 @@ A small, notch-centered macOS interface to communicate with agents. Open it from
 
 ## Basic Controls
 
-- <kbd>⌃</kbd> <kbd>Space</kbd> opens / collapses pocket (configurable in Settings)
-- <kbd>Return</kbd> sends
-- <kbd>⇧</kbd> <kbd>Return</kbd> adds a line
-- <kbd>Esc</kbd> collapses pocket
+<table>
+  <tr><td><kbd>⌃</kbd> <kbd>Space</kbd></td><td>Opens / collapses pocket (configurable in Settings)</td></tr>
+  <tr><td><kbd>Return</kbd></td><td>Sends</td></tr>
+  <tr><td><kbd>⇧</kbd> <kbd>Return</kbd></td><td>Adds a line</td></tr>
+  <tr><td><kbd>Esc</kbd></td><td>Collapses pocket</td></tr>
+  <tr><td><kbd>Tab</kbd></td><td>Swaps focus between prompt box and conversation</td></tr>
+</table>
 
 ## Download (Coming Soon)
 

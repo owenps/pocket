@@ -6,7 +6,7 @@ struct IslandShape: Shape {
     var progress: Double
 
     func path(in rect: CGRect) -> Path {
-        let progress = min(1.06, max(-0.06, progress))
+        let progress = CGFloat(min(1.06, max(-0.06, progress)))
         let shoulder = min(4 + 10 * progress, rect.width / 4, rect.height / 2)
         let bottom = min(12 + 14 * progress, rect.height / 2, (rect.width - 2 * shoulder) / 2)
         let left = rect.minX + shoulder
