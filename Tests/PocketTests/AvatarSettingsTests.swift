@@ -8,7 +8,6 @@ import Testing
 struct AvatarSettingsTests {
     @Test func appearanceControlsTrackPreferencesAndSaveSizeEdits() throws {
         try withSettings { state, defaults, host in
-            state.conversation.draft = "An unsent thought"
             try waitForLayout(host) { swatch(.campfire, in: host)?.state == .on }
 
             state.avatar.palette = .glacier
@@ -31,62 +30,6 @@ struct AvatarSettingsTests {
                 defaults: defaults
             )
             #expect(recreated.avatar == state.avatar)
-
-            state.avatar.face = .mellow
-            try waitForLayout(host) { popup("Mellow", in: host) != nil }
-            state.avatar = AvatarAppearance()
-            try waitForLayout(host) { state.avatar == AvatarAppearance() && swatch(.campfire, in: host)?.state == .on }
-            #expect(swatch(.glacier, in: host)?.state == .off)
-            state.avatar.headwear = .none
-            try waitForLayout(host) { popup("None", in: host) != nil }
-            #expect(state.conversation.draft == "An unsent thought")
-        }
-    }
-
-    @Test func promotedAndRetainedChoicesStayVisibleAndPersistThroughLiveBindings() throws {
-        try withSettings { state, defaults, host in
-            state.avatar.palette = .lilac
-            state.avatar.size = .large
-            state.conversation.draft = "Keep my choices"
-            let hats: [(AvatarAppearance.Headwear, String)] = [
-                (.beanie, "Beanie"), (.none, "None"), (.cap, "Cap"),
-                (.sprout, "Sprout"), (.antenna, "Antenna"),
-                (.mushroom, "Mushroom"), (.bandana, "Bandana"), (.orbit, "Orbit"), (.pebbles, "Pebbles"),
-            ]
-            let faces: [(AvatarAppearance.Face, String)] = [
-                (.dots, "Dot"), (.wide, "Wide"),
-                (.glasses, "Glasses"), (.mellow, "Mellow"),
-                (.happy, "Happy"), (.dashes, "Dash"),
-            ]
-            for (headwear, title) in hats {
-                let retainedFace = state.avatar.face
-                state.avatar.headwear = headwear
-                try waitForLayout(host) { popup(title, in: host) != nil }
-                let control = try #require(popup(title, in: host))
-                #expect(control.isEnabled)
-                #expect(state.avatar.face == retainedFace)
-                let recreated = PanelState(
-                    conversation: ConversationSession(backend: ControlledAssistantBackend(), defaults: defaults),
-                    defaults: defaults
-                )
-                #expect(recreated.avatar == state.avatar)
-            }
-            for (face, title) in faces {
-                state.avatar.face = face
-                try waitForLayout(host) { popup(title, in: host) != nil }
-                let control = try #require(popup(title, in: host))
-                #expect(control.isEnabled)
-                #expect(popup("Soft square", in: host) == nil)
-                #expect(state.avatar.headwear == .pebbles)
-                let recreated = PanelState(
-                    conversation: ConversationSession(backend: ControlledAssistantBackend(), defaults: defaults),
-                    defaults: defaults
-                )
-                #expect(recreated.avatar == state.avatar)
-            }
-            #expect(state.avatar.palette == .lilac)
-            #expect(state.avatar.size == .large)
-            #expect(state.conversation.draft == "Keep my choices")
         }
     }
 

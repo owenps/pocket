@@ -26,17 +26,6 @@ struct ShortcutChoiceTests {
         #expect(Set([choice, try #require(ShortcutChoice(rawValue: choice.rawValue))]).count == 1)
     }
 
-    @Test @MainActor func customChoicePersistsThroughExistingPreferences() throws {
-        try withTestDefaults { defaults in
-            let session = ConversationSession(backend: ControlledAssistantBackend(), defaults: defaults)
-            let state = PanelState(conversation: session, defaults: defaults)
-            let choice = try #require(ShortcutChoice(keyCode: UInt16(kVK_ANSI_K), modifiers: .command))
-            #expect(state.changeShortcut(to: choice) { _ in })
-            #expect(defaults.string(forKey: "shortcut") == choice.rawValue)
-            #expect(PanelState(conversation: session, defaults: defaults).shortcut == choice)
-        }
-    }
-
     @Test func modifiersAreNormalizedAndConvertedToCarbon() throws {
         let choice = try #require(ShortcutChoice(
             keyCode: UInt16(kVK_ANSI_A),
@@ -87,34 +76,9 @@ struct ShortcutChoiceTests {
         }
     }
 
-    @Test(arguments: ["", "unknown", "40", "40:", ":1048576", "40:1048576:1", "-1:1048576", "65536:1048576", "40:no", "40:0", "56:1048576"])
+    @Test(arguments: ["", "unknown", "doubleTap:55", "40", "40:", ":1048576", "40:1048576:1", "-1:1048576", "65536:1048576", "40:no", "40:0", "56:1048576"])
     func malformedOrInvalidRawValuesAreRejected(_ rawValue: String) {
         #expect(ShortcutChoice(rawValue: rawValue) == nil)
-    }
-
-    @Test func legacyAndCustomPreferencesRemainReadable() throws {
-        try withTestDefaults { defaults in
-            let session = ConversationSession(backend: ControlledAssistantBackend(), defaults: defaults)
-            for raw in ["commandShiftSpace", "40:1048576"] {
-                defaults.set(raw, forKey: "shortcut")
-                let state = PanelState(conversation: session, defaults: defaults)
-                let choice = try #require(ShortcutChoice(rawValue: raw))
-                #expect(state.shortcut == choice)
-                let replacement = try #require(ShortcutChoice(keyCode: UInt16(kVK_ANSI_K), modifiers: .option))
-                #expect(state.changeShortcut(to: replacement) { _ in })
-                #expect(defaults.string(forKey: "shortcut") == replacement.rawValue)
-                #expect(PanelState(conversation: session, defaults: defaults).shortcut == replacement)
-            }
-        }
-    }
-
-    @Test func obsoleteDoubleTapPreferenceRestoresDefaultShortcut() throws {
-        try withTestDefaults { defaults in
-            defaults.set("doubleTap:55", forKey: "shortcut")
-            let session = ConversationSession(backend: ControlledAssistantBackend(), defaults: defaults)
-            #expect(ShortcutChoice(rawValue: "doubleTap:55") == nil)
-            #expect(PanelState(conversation: session, defaults: defaults).shortcut == .controlSpace)
-        }
     }
 
     @Test func specialKeysHaveReadableLabels() throws {

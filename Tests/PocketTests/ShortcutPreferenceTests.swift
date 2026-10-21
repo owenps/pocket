@@ -4,13 +4,15 @@ import Testing
 
 @MainActor
 struct ShortcutPreferenceTests {
-    @Test func successfulChangeRegistersBeforeUpdatingAndPersistingChoice() throws {
+    @Test(arguments: ["controlSpace", "40:1048576"])
+    func successfulChangeRegistersBeforeUpdatingAndPersistingChoice(rawValue: String) throws {
+        let replacement = try #require(ShortcutChoice(rawValue: rawValue))
         try withTestDefaults { defaults in
             defaults.set(ShortcutChoice.optionSpace.rawValue, forKey: "shortcut")
             let state = makeState(defaults: defaults)
             var registrations: [ShortcutChoice] = []
 
-            let changed = state.changeShortcut(to: .controlSpace) { choice in
+            let changed = state.changeShortcut(to: replacement) { choice in
                 registrations.append(choice)
                 #expect(state.shortcut == .optionSpace)
                 #expect(defaults.string(forKey: "shortcut") == ShortcutChoice.optionSpace.rawValue)
@@ -18,10 +20,10 @@ struct ShortcutPreferenceTests {
             }
 
             #expect(changed)
-            #expect(registrations == [.controlSpace])
-            #expect(state.shortcut == .controlSpace)
-            #expect(defaults.string(forKey: "shortcut") == ShortcutChoice.controlSpace.rawValue)
-            #expect(makeState(defaults: defaults).shortcut == .controlSpace)
+            #expect(registrations == [replacement])
+            #expect(state.shortcut == replacement)
+            #expect(defaults.string(forKey: "shortcut") == replacement.rawValue)
+            #expect(makeState(defaults: defaults).shortcut == replacement)
             #expect(state.shortcutError == nil)
         }
     }

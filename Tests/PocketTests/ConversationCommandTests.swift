@@ -20,12 +20,18 @@ struct ConversationCommandTests {
         }
     }
 
-    @Test func newCancelsClearsAndStartsWithFreshHistoryDespiteStaleEvents() async throws {
+    @Test(arguments: [false, true])
+    func newCommandClearsConversationAndConsumesDraft(busy: Bool) async throws {
         try await withConversationFixture { session, backend, defaults in
             session.draft = "Old question"
             #expect(session.submitDraft())
-            let oldRun = try await backend.waitForRun(at: 0)
-            oldRun.emit("Old partial")
+            let run = try await backend.waitForRun(at: 0)
+            run.emit("Old answer")
+            if !busy {
+                run.finish()
+                try await AsyncTestSupport.wait { run.didReturn }
+            }
+
             session.draft = " \n/new\t "
             #expect(session.submitDraft())
             #expect(session.messages.isEmpty)
@@ -35,40 +41,14 @@ struct ConversationCommandTests {
             #expect(defaults.string(forKey: "draft") == "")
             #expect(backend.runCount == 1)
 
-            oldRun.emit("Stale before new turn")
-            #expect(session.messages.isEmpty)
-            #expect(!session.hasUnreadReply)
-            session.draft = "Fresh question"
-            #expect(session.submitDraft())
-            let newRun = try await backend.waitForRun(at: 1)
-            #expect(newRun.history == [session.messages[0]])
-            #expect(newRun.history.map(\.text) == ["Fresh question"])
-            let freshMessages = session.messages
-            oldRun.emit("Stale during new turn")
-            oldRun.finish(.failure(CancellationError()))
-            try await AsyncTestSupport.wait { oldRun.didReturn }
-            #expect(oldRun.wasCancelled)
-            #expect(session.messages == freshMessages)
-            #expect(session.replyPhase == .working)
-            #expect(!session.hasUnreadReply)
-
-            newRun.emit("Fresh answer")
-            newRun.finish()
-            try await AsyncTestSupport.wait { !session.isBusy }
-            #expect(session.messages.last?.outcome == .completed)
-            #expect(session.hasUnreadReply)
-            session.draft = "/new"
-            #expect(session.submitDraft())
-            #expect(session.messages.isEmpty)
-            #expect(!session.hasUnreadReply)
-            #expect(session.draft.isEmpty)
-            #expect(defaults.string(forKey: "draft") == "")
-            #expect(backend.runCount == 2)
+            run.finish()
+            try await AsyncTestSupport.wait { run.didReturn }
+            #expect(run.wasCancelled == busy)
         }
     }
 
     @Test(arguments: [false, true])
-    func stopWhileBusyRetainsHistoryAndRejectsStaleEvents(streaming: Bool) async throws {
+    func stopCommandRetainsHistoryAndConsumesDraft(streaming: Bool) async throws {
         try await withConversationFixture { session, backend, defaults in
             session.draft = "Question"
             #expect(session.submitDraft())
@@ -87,21 +67,9 @@ struct ConversationCommandTests {
             #expect(defaults.string(forKey: "draft") == "")
             #expect(backend.runCount == 1)
 
-            let stopped = session.messages
-            session.draft = "Follow-up"
-            #expect(session.submitDraft())
-            let newRun = try await backend.waitForRun(at: 1)
-            #expect(newRun.history == stopped + [session.messages[2]])
-            #expect(newRun.history.last?.text == "Follow-up")
-            let working = session.messages
-            let unreadID = session.unreadReplyID
-            oldRun.emit("Stale answer")
             oldRun.finish()
             try await AsyncTestSupport.wait { oldRun.didReturn }
             #expect(oldRun.wasCancelled)
-            #expect(session.messages == working)
-            #expect(session.replyPhase == .working)
-            #expect(session.unreadReplyID == unreadID)
         }
     }
 

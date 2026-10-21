@@ -8,7 +8,7 @@ struct FontSizePreview: View {
             Text("Preview")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text("“The best way to spread Christmas cheer is singing loud for all to hear.”")
+            Text("The best way to spread Christmas cheer is singing loud for all to hear.")
                 .font(.system(size: fontSize))
                 .foregroundStyle(.white)
                 .fixedSize(horizontal: false, vertical: true)
