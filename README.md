@@ -50,7 +50,15 @@ Local builds are ad-hoc signed, not notarized for distribution.
 
 ## Feedback
 
-Outside contributions and pull requests are closed for now. Bug reports and feature requests are welcome. [Open a new issue](../../issues/new).
+Outside contributions and pull requests are closed for now. Bug reports and feature requests are welcome.
+
+<a href="../../issues/new">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/issues-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/images/issues-light.png">
+    <img src="docs/images/issues-light.png" alt="Report an issue" width="200" height="52">
+  </picture>
+</a>
 
 ## Privacy
 
