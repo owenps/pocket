@@ -4,10 +4,9 @@ import SwiftUI
 import Testing
 @testable import Pocket
 
-@MainActor
-struct StopButtonTests {
+extension PanelViewTests {
     @Test(arguments: [false, true])
-    func stopVisibilityTracksRepliesWithoutMovingOrReplacingTheDraft(reduceMotion: Bool) throws {
+    func stopVisibilityTracksRepliesWithoutMovingOrReplacingTheDraft(reduceMotion: Bool) async throws {
         NativeAccessibility.enable()
         let name = "StopButtonTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: name))
@@ -31,10 +30,24 @@ struct StopButtonTests {
         let fixture = OffscreenHost(PanelView(
             state: state, expand: {}, collapse: {}, editorHeightChanged: { _ in },
             submit: { state.submitDraft() }
-        ).environment(\._accessibilityReduceMotion, reduceMotion), size: state.expandedSize)
+        ).environment(\._accessibilityReduceMotion, reduceMotion)
+            .transaction { transaction in
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }, size: state.expandedSize)
         defer { fixture.close() }
         let host = fixture.view
-        try NativeUITestSupport.wait {
+        var lastRendering = "not sampled"
+        func waitForRendering(_ phase: String, until condition: () throws -> Bool) async throws {
+            do {
+                try await AsyncTestSupport.wait(until: condition)
+            } catch {
+                throw StopRenderingFailure(description:
+                    "\(phase), reduceMotion=\(reduceMotion), busy=\(conversation.isBusy): \(error); \(lastRendering)"
+                )
+            }
+        }
+        try await waitForRendering("mount draft editor") {
             host.layoutSubtreeIfNeeded()
             return draftEditor(in: host)?.string == conversation.draft
         }
@@ -51,29 +64,42 @@ struct StopButtonTests {
 
         // Offscreen bitmaps verify rendered visibility, not compositor fade frames.
         // Exercise the first response from an idle mount, then a subsequent one.
-        for _ in 0..<2 {
+        for reply in 1...2 {
             let idle = try snapshot(host)
             #expect(state.submitDraft())
             conversation.draft = "Retained next draft"
             var crop = CGRect.zero
-            try NativeUITestSupport.wait {
+            try await waitForRendering("show Stop for reply \(reply)") {
                 host.layoutSubtreeIfNeeded()
                 try checkDraft()
-                guard let stop = accessibility.descendant(identifier: "stop-reply") else { return false }
+                guard let stop = accessibility.descendant(identifier: "stop-reply") else {
+                    lastRendering = "Stop accessibility element missing"
+                    return false
+                }
                 crop = host.convert(fixture.window.convertFromScreen(stop.frame), from: nil)
+                lastRendering = "crop=\(crop), bounds=\(host.bounds)"
                 guard crop.width > 0, crop.height > 0, host.bounds.contains(crop) else { return false }
-                return try brightness(snapshot(host), in: crop) > brightness(idle, in: crop) + 100
+                let off = brightness(idle, in: crop)
+                let on = try brightness(snapshot(host), in: crop)
+                lastRendering += ", off=\(off), on=\(on)"
+                return on > off + 100
             }
             let off = brightness(idle, in: crop)
             #expect(off < 1)
 
             conversation.stopReply()
-            try NativeUITestSupport.wait {
+            try await waitForRendering("hide Stop for reply \(reply)") {
                 host.layoutSubtreeIfNeeded()
                 try checkDraft()
-                return try abs(brightness(snapshot(host), in: crop) - off) < 1
+                let hidden = try brightness(snapshot(host), in: crop)
+                lastRendering = "crop=\(crop), off=\(off), hidden=\(hidden)"
+                return abs(hidden - off) < 1
             }
         }
+    }
+
+    private struct StopRenderingFailure: Error, CustomStringConvertible {
+        let description: String
     }
 
     private func draftEditor(in view: NSView) -> DraftTextView? {
