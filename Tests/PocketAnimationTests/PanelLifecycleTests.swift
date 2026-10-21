@@ -86,10 +86,13 @@ struct PanelLifecycleTests {
             let controller = PanelController(state: state)
             controller.start()
             let window = try #require(app.windows.first { !existingWindows.contains(ObjectIdentifier($0)) })
-            let other = NSWindow(
+            // Transfer real key focus without requiring the test process to activate.
+            let other = NSPanel(
                 contentRect: CGRect(x: 100, y: 100, width: 200, height: 100),
-                styleMask: [.titled], backing: .buffered, defer: false
+                styleMask: [.titled, .nonactivatingPanel], backing: .buffered, defer: false
             )
+            other.becomesKeyOnlyIfNeeded = false
+            other.hidesOnDeactivate = false
             other.isReleasedWhenClosed = false
             defer {
                 controller.collapse()
@@ -113,10 +116,6 @@ struct PanelLifecycleTests {
                     )
                 }
             }
-
-            // Unlike the nonactivating panel, the ordinary focus-target window needs an active app.
-            app.activate(ignoringOtherApps: true)
-            try waitForFocus("activate test application") { app.isActive }
 
             controller.toggle()
             try waitForFocus("shortcut opens panel") { state.isExpanded && window.isKeyWindow }
