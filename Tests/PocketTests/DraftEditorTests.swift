@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import Testing
 @testable import Pocket
 
@@ -184,6 +185,114 @@ struct DraftEditorTests {
             #expect(view.editor.string == "Send me")
             #expect(view.editor.selectedRange() == selection)
         }
+    }
+
+    @Test(arguments: [NSEvent.ModifierFlags.control, [.control, .capsLock], [.control, .function]])
+    func controlCClearsWholeDraftThroughBindingAndShrinksNativeLayout(modifiers: NSEvent.ModifierFlags) async {
+        let view = makeEditor(width: 300)
+        view.setEditing(true, focusRequest: 1)
+        let draft = Array(repeating: "Keep 🐱 this line", count: 30).joined(separator: "\n")
+        var text = draft
+        var changes: [String] = []
+        let coordinator = DraftEditor.Coordinator(text: Binding(
+            get: { text }, set: { text = $0; changes.append($0) }
+        ))
+        view.editor.delegate = coordinator
+        view.setTextIfNeeded(draft)
+        view.editor.setSelectedRange(NSRange(location: 2, length: 3))
+        let placeholder = view.editor.placeholder
+        var submissions = 0
+        var focusRequests = 0
+        view.editor.onSubmit = { submissions += 1; return true }
+        view.editor.onFocusConversation = { focusRequests += 1 }
+        var heights: [CGFloat] = []
+        view.onHeightChange = { heights.append($0) }
+        #expect(view.refreshLayout() == DraftEditor.maximumHeight)
+        await drainMainQueue()
+
+        view.editor.keyDown(with: NativeTextTestSupport.keyEvent(code: 8, characters: "\u{3}", modifiers: modifiers))
+
+        #expect(view.editor.string.isEmpty)
+        #expect(text.isEmpty)
+        #expect(changes == [""])
+        #expect(view.editor.selectedRange() == NSRange(location: 0, length: 0))
+        #expect(view.measuredContentHeight == DraftEditor.minimumHeight)
+        #expect(view.contentView.bounds.origin == .zero)
+        #expect(view.editor.placeholder == placeholder)
+        #expect(submissions == 0)
+        #expect(focusRequests == 0)
+        await drainMainQueue()
+        #expect(heights == [DraftEditor.maximumHeight, DraftEditor.minimumHeight])
+
+        // An already empty draft is consumed without another edit notification.
+        view.editor.keyDown(with: NativeTextTestSupport.keyEvent(code: 8, characters: "\u{3}", modifiers: modifiers))
+        #expect(changes == [""])
+    }
+
+    @Test func controlCClearRetainsNativeUndoAndRedo() {
+        let view = makeEditor(width: 360)
+        let responder = DraftUndoResponder()
+        responder.edits.groupsByEvent = false
+        view.editor.nextResponder = responder
+        view.setEditing(true, focusRequest: 1)
+        view.setTextIfNeeded("Draft 🐱")
+        view.editor.setSelectedRange(NSRange(location: view.editor.string.utf16.count, length: 0))
+        responder.edits.beginUndoGrouping()
+        view.editor.insertText(" addition", replacementRange: view.editor.selectedRange())
+        view.editor.breakUndoCoalescing()
+        responder.edits.endUndoGrouping()
+        view.editor.setSelectedRange(NSRange(location: 1, length: 2))
+
+        responder.edits.beginUndoGrouping()
+        view.editor.keyDown(with: NativeTextTestSupport.keyEvent(code: 8, characters: "\u{3}", modifiers: .control))
+        responder.edits.endUndoGrouping()
+        #expect(view.editor.string.isEmpty)
+        responder.edits.undo()
+        #expect(view.editor.string == "Draft 🐱 addition")
+        responder.edits.undo()
+        #expect(view.editor.string == "Draft 🐱")
+        responder.edits.redo()
+        responder.edits.redo()
+        #expect(view.editor.string.isEmpty)
+    }
+
+    @Test func controlCDoesNotEditReadOnlyDraft() {
+        let view = makeEditor(width: 360)
+        view.setTextIfNeeded("Keep the draft")
+        let selection = NSRange(location: 2, length: 3)
+        view.editor.setSelectedRange(selection)
+        view.setEditing(false, focusRequest: 1)
+
+        view.editor.keyDown(with: NativeTextTestSupport.keyEvent(code: 8, characters: "\u{3}", modifiers: .control))
+
+        #expect(view.editor.string == "Keep the draft")
+        #expect(view.editor.selectedRange() == selection)
+    }
+
+    @Test(arguments: [NSEvent.ModifierFlags(), .command, [.control, .shift], [.control, .option],
+                      [.control, .command]])
+    func otherCShortcutsFollowNativeEditing(modifiers: NSEvent.ModifierFlags) {
+        let view = makeEditor(width: 360)
+        let window = NativeTextTestSupport.window(containing: view)
+        defer { window.contentView = nil }
+        view.setEditing(true, focusRequest: 1)
+        view.setTextIfNeeded("Keep this draft")
+        let selection = NSRange(location: 2, length: 3)
+        view.editor.setSelectedRange(selection)
+        let event = NativeTextTestSupport.keyEvent(code: 8, characters: "c", modifiers: modifiers)
+        view.editor.keyDown(with: event)
+
+        // Includes Command-C: leave native copy/key-binding behavior untouched.
+        let native = NSTextView(frame: view.frame)
+        native.isRichText = false
+        window.contentView = native
+        window.makeFirstResponder(native)
+        native.string = "Keep this draft"
+        native.setSelectedRange(selection)
+        native.keyDown(with: event)
+        #expect(view.editor.string == native.string)
+        #expect(view.editor.selectedRange() == native.selectedRange())
+        #expect(!view.editor.string.isEmpty)
     }
 
     @Test func rejectedReturnConsumesBusyAndEmptyDrafts() {
@@ -429,12 +538,69 @@ struct DraftEditorTests {
         #expect(view.editor.string == draft + " addition\n")
     }
 
+    @Test(arguments: ["/", "/s", "/stop"])
+    func tabCompletesCommandThroughBindingWithoutSubmittingOrMovingFocus(draft: String) {
+        let view = makeEditor(width: 360)
+        view.setEditing(true, focusRequest: 1)
+        var text = draft
+        let coordinator = DraftEditor.Coordinator(text: Binding(get: { text }, set: { text = $0 }))
+        view.editor.delegate = coordinator
+        view.setTextIfNeeded(draft)
+        view.editor.setSelectedRange(NSRange(location: 0, length: draft.utf16.count))
+        var focusRequests = 0
+        var submissions = 0
+        var dismissals = 0
+        view.editor.onCompleteCommand = { "/stop" }
+        view.editor.onDismissCommands = {
+            #expect(text == "/stop")
+            #expect(view.editor.selectedRange() == NSRange(location: 5, length: 0))
+            dismissals += 1
+            return true
+        }
+        view.editor.onFocusConversation = { focusRequests += 1 }
+        view.editor.onSubmit = { submissions += 1; return true }
+
+        view.editor.keyDown(with: NativeTextTestSupport.keyEvent(code: 48, characters: "\t"))
+
+        #expect(view.editor.string == "/stop")
+        #expect(text == "/stop")
+        #expect(view.editor.selectedRange() == NSRange(location: 5, length: 0))
+        #expect(focusRequests == 0)
+        #expect(submissions == 0)
+        #expect(dismissals == 1)
+        view.editor.keyDown(with: NativeTextTestSupport.keyEvent(code: 48, characters: "\t", modifiers: .shift))
+        #expect(focusRequests == 1)
+        #expect(view.editor.string == "/stop")
+        #expect(submissions == 0)
+        #expect(dismissals == 1)
+    }
+
+    @Test func tabCompletionSupportsNativeUndo() {
+        let view = makeEditor(width: 360)
+        let responder = DraftUndoResponder()
+        responder.edits.groupsByEvent = false
+        view.editor.nextResponder = responder
+        view.setEditing(true, focusRequest: 1)
+        view.setTextIfNeeded("/")
+        view.editor.onCompleteCommand = { "/stop" }
+        responder.edits.beginUndoGrouping()
+        view.editor.keyDown(with: NativeTextTestSupport.keyEvent(code: 48, characters: "\t"))
+        responder.edits.endUndoGrouping()
+        #expect(view.editor.string == "/stop")
+        responder.edits.undo()
+        #expect(view.editor.string == "/")
+        responder.edits.redo()
+        #expect(view.editor.string == "/stop")
+    }
+
     @Test func tabNavigatesToConversationWithoutEditingOrSubmitting() {
         let view = makeEditor(width: 360)
         view.setEditing(true, focusRequest: 1)
         view.setTextIfNeeded("Keep this draft")
         var requests = 0
+        var completions = 0
         var submissions = 0
+        view.editor.onCompleteCommand = { completions += 1; return nil }
         view.editor.onFocusConversation = { requests += 1 }
         view.editor.onSubmit = { submissions += 1; return true }
         for modifiers: NSEvent.ModifierFlags in [[], .shift] {
@@ -443,7 +609,184 @@ struct DraftEditorTests {
             #expect(requests > previousRequests)
         }
         #expect(submissions == 0)
+        #expect(completions == 1)
         #expect(view.editor.string == "Keep this draft")
+    }
+
+    @Test(arguments: [UInt16(126), 125])
+    func commandSelectionConsumesBareArrowsWithoutMovingCaret(code: UInt16) {
+        let view = makeEditor(width: 360)
+        let window = NativeTextTestSupport.window(containing: view)
+        defer { window.contentView = nil }
+        view.setEditing(true, focusRequest: 1)
+        view.setTextIfNeeded("One\nTwo\nSix")
+        let selection = NSRange(location: 5, length: 0)
+        view.editor.setSelectedRange(selection)
+        var moves: [Int] = []
+        var submissions = 0
+        view.editor.onMoveCommandSelection = { moves.append($0); return true }
+        view.editor.onSubmit = { submissions += 1; return true }
+
+        // Native arrows may include non-shortcut function/numeric-pad flags.
+        for modifiers: NSEvent.ModifierFlags in [[], [.function, .numericPad], .capsLock] {
+            view.editor.keyDown(with: NativeTextTestSupport.keyEvent(
+                code: code, characters: code == 126 ? "\u{F700}" : "\u{F701}", modifiers: modifiers
+            ))
+            #expect(view.editor.selectedRange() == selection)
+        }
+        #expect(moves == Array(repeating: code == 126 ? -1 : 1, count: 3))
+        #expect(submissions == 0)
+        #expect(view.editor.string == "One\nTwo\nSix")
+    }
+
+    @Test(arguments: [UInt16(126), 125])
+    func declinedAndModifiedCommandArrowsKeepNativeMovement(code: UInt16) {
+        for modifiers: NSEvent.ModifierFlags in [[], .shift, .control, .option, .command] {
+            let view = makeEditor(width: 360)
+            let window = NativeTextTestSupport.window(containing: view)
+            defer { window.contentView = nil }
+            view.setEditing(true, focusRequest: 1)
+            view.setTextIfNeeded("One\nTwo\nSix")
+            let selection = NSRange(location: 5, length: 0)
+            view.editor.setSelectedRange(selection)
+            var moves: [Int] = []
+            view.editor.onMoveCommandSelection = {
+                moves.append($0)
+                return !modifiers.isEmpty
+            }
+            let event = NativeTextTestSupport.keyEvent(
+                code: code, characters: code == 126 ? "\u{F700}" : "\u{F701}", modifiers: modifiers
+            )
+            view.editor.keyDown(with: event)
+
+            let native = NSTextView(frame: view.editor.frame)
+            native.isRichText = false
+            native.font = view.editor.font
+            native.textContainerInset = view.editor.textContainerInset
+            native.textContainer?.lineFragmentPadding = 0
+            window.contentView = native
+            window.makeFirstResponder(native)
+            native.string = "One\nTwo\nSix"
+            native.setSelectedRange(selection)
+            native.keyDown(with: event)
+
+            #expect(moves == (modifiers.isEmpty ? [code == 126 ? -1 : 1] : []))
+            #expect(view.editor.string == native.string)
+            #expect(view.editor.selectedRange() == native.selectedRange())
+            if modifiers.isEmpty {
+                #expect(view.editor.selectedRange() != selection)
+            }
+        }
+    }
+
+    @Test(arguments: [UInt16(126), 125])
+    func readOnlyDraftDoesNotMoveCommandSelection(code: UInt16) {
+        let view = makeEditor(width: 360)
+        view.setTextIfNeeded("One\nTwo\nSix")
+        view.setEditing(false, focusRequest: 1)
+        var moves: [Int] = []
+        view.editor.onMoveCommandSelection = { moves.append($0); return true }
+
+        view.editor.keyDown(with: NativeTextTestSupport.keyEvent(
+            code: code, characters: code == 126 ? "\u{F700}" : "\u{F701}"
+        ))
+
+        #expect(moves.isEmpty)
+        #expect(view.editor.string == "One\nTwo\nSix")
+    }
+
+    @Test func escapeDismissesCommandsBeforeForwardingToPanel() {
+        let view = makeEditor(width: 360)
+        view.setEditing(true, focusRequest: 1)
+        view.setTextIfNeeded("/command")
+        let selection = NSRange(location: 3, length: 0)
+        view.editor.setSelectedRange(selection)
+        let responder = DraftCancelResponder()
+        view.nextResponder = responder
+        var dismissals = 0
+        var consumes = true
+        view.editor.onDismissCommands = {
+            #expect(responder.cancellations == 0)
+            dismissals += 1
+            return consumes
+        }
+
+        view.editor.cancelOperation(nil)
+        #expect(dismissals == 1)
+        #expect(responder.cancellations == 0)
+        consumes = false
+        view.editor.cancelOperation(nil)
+        #expect(dismissals == 2)
+        #expect(responder.cancellations == 1)
+        #expect(view.editor.string == "/command")
+        #expect(view.editor.selectedRange() == selection)
+    }
+
+    @Test(arguments: [UInt16(126), 125, 48])
+    func markedTextKeepsNativeKeysWithoutCommandCallbacks(code: UInt16) {
+        let view = makeEditor(width: 360)
+        let window = NativeTextTestSupport.window(containing: view)
+        defer { window.contentView = nil }
+        view.setEditing(true, focusRequest: 1)
+        var moves: [Int] = []
+        view.editor.onMoveCommandSelection = { moves.append($0); return true }
+        var completions = 0
+        view.editor.onCompleteCommand = { completions += 1; return "/stop" }
+        view.editor.setMarkedText("compose", selectedRange: NSRange(location: 3, length: 0),
+                                  replacementRange: NSRange(location: NSNotFound, length: 0))
+        #expect(view.editor.hasMarkedText())
+        let event = NativeTextTestSupport.keyEvent(
+            code: code, characters: code == 48 ? "\t" : (code == 126 ? "\u{F700}" : "\u{F701}")
+        )
+        view.editor.keyDown(with: event)
+
+        // Synthetic composition has no real IME; AppKit supplies the baseline.
+        let native = NSTextView(frame: view.editor.frame)
+        native.isRichText = false
+        native.font = view.editor.font
+        native.textContainerInset = view.editor.textContainerInset
+        native.textContainer?.lineFragmentPadding = 0
+        window.contentView = native
+        window.makeFirstResponder(native)
+        native.setMarkedText("compose", selectedRange: NSRange(location: 3, length: 0),
+                             replacementRange: NSRange(location: NSNotFound, length: 0))
+        native.keyDown(with: event)
+
+        #expect(moves.isEmpty)
+        #expect(completions == 0)
+        #expect(view.editor.string == native.string)
+        #expect(view.editor.selectedRange() == native.selectedRange())
+        #expect(view.editor.markedRange() == native.markedRange())
+        #expect(view.editor.hasMarkedText() == native.hasMarkedText())
+    }
+
+    @Test func dismantlingEditorReleasesCommandCallbacks() {
+        let view = makeEditor(width: 360)
+        let window = NativeTextTestSupport.window(containing: view)
+        defer { window.contentView = nil }
+        view.setEditing(true, focusRequest: 1)
+        view.setTextIfNeeded("One\nTwo\nSix")
+        let selection = NSRange(location: 5, length: 0)
+        view.editor.setSelectedRange(selection)
+        let responder = DraftCancelResponder()
+        view.nextResponder = responder
+        var moves: [Int] = []
+        var dismissals = 0
+        var completions = 0
+        view.editor.onMoveCommandSelection = { moves.append($0); return true }
+        view.editor.onCompleteCommand = { completions += 1; return "/stop" }
+        view.editor.onDismissCommands = { dismissals += 1; return true }
+
+        DraftEditor.dismantleNSView(view, coordinator: DraftEditor.Coordinator(text: .constant("")))
+        view.editor.keyDown(with: NativeTextTestSupport.keyEvent(code: 126, characters: "\u{F700}"))
+        view.editor.cancelOperation(nil)
+
+        #expect(moves.isEmpty)
+        #expect(view.editor.selectedRange() != selection)
+        #expect(dismissals == 0)
+        #expect(responder.cancellations == 1)
+        view.editor.keyDown(with: NativeTextTestSupport.keyEvent(code: 48, characters: "\t"))
+        #expect(completions == 0)
     }
 
     @Test func wheelIsIgnoredAndEscapeStillReachesPanelResponder() throws {

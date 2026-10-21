@@ -6,6 +6,133 @@ import Testing
 
 @MainActor
 struct PanelViewTests {
+    @Test func autocompleteKeepsConversationAndComposerWhileArrowKeysSelectTheCommand() async throws {
+        NativeAccessibility.enable()
+        let backend = ControlledAssistantBackend()
+        try await withPanel(backend: backend) { state, window, host in
+            state.openPanel()
+            try await waitForLayout(host) { window.firstResponder is NSTextView }
+            let editor = try #require(window.firstResponder as? NSTextView)
+            editor.insertText("Question", replacementRange: editor.selectedRange())
+            try press(36, in: window)
+            let run = try await backend.waitForRun(at: 0)
+            run.emit("Partial answer")
+            try await waitForLayout(host) {
+                textViews(in: host).contains { !$0.isEditable && $0.string.contains("Partial answer") }
+            }
+            let transcript = try #require(textViews(in: host).first { !$0.isEditable })
+            let history = transcript.string
+            let viewportHeight = transcript.enclosingScrollView?.frame.height
+            let accessibility = NativeAccessibility(host)
+            editor.insertText("/", replacementRange: editor.selectedRange())
+            try await waitForLayout(host) {
+                accessibility.descendant(identifier: "command-new")?.frame.height ?? 0 > 0
+                    && state.displayedCommandHeight > 0
+            }
+            #expect(transcript.string == history)
+            #expect(transcript.enclosingScrollView?.frame.height == viewportHeight)
+            #expect(accessibility.text.contains("Partial answer"))
+            #expect(accessibility.descendant(identifier: "command-new")?.text.contains("Selected") == true)
+            #expect(window.firstResponder === editor)
+            let selection = editor.selectedRange()
+
+            try press(125, in: window)
+            try await waitForLayout(host) {
+                accessibility.descendant(identifier: "command-stop")?.text.contains("Selected") == true
+            }
+            #expect(editor.string == "/")
+            #expect(editor.selectedRange() == selection)
+            #expect(window.firstResponder === editor)
+            try press(48, in: window)
+            try await waitForLayout(host) {
+                editor.string == "/stop" && state.displayedCommandHeight == 0
+                    && accessibility.descendant(identifier: "command-suggestions") == nil
+            }
+            #expect(state.commandSuggestions == nil)
+            #expect(state.conversation.draft == "/stop")
+            #expect(editor.selectedRange() == NSRange(location: 5, length: 0))
+            #expect(state.conversation.isBusy)
+            #expect(transcript.string == history)
+            #expect(backend.runCount == 1)
+            #expect(window.firstResponder === editor)
+            try press(36, in: window)
+            try await waitForLayout(host) { editor.string.isEmpty && state.displayedCommandHeight == 0 }
+            #expect(!state.conversation.isBusy)
+            #expect(state.conversation.messages.last?.isStopped == true)
+            #expect(state.conversation.messages.first?.text == "Question")
+            #expect(backend.runCount == 1)
+            #expect(window.firstResponder === editor)
+        }
+    }
+
+    @Test func escapeDismissesSuggestionsAndFurtherTypingReopensWithoutWarnings() async throws {
+        NativeAccessibility.enable()
+        try await withPanel { state, window, host in
+            state.openPanel()
+            try await waitForLayout(host) { window.firstResponder is NSTextView }
+            let editor = try #require(window.firstResponder as? NSTextView)
+            let accessibility = NativeAccessibility(host)
+            editor.insertText("/", replacementRange: editor.selectedRange())
+            try await waitForLayout(host) { accessibility.descendant(identifier: "command-new") != nil }
+            editor.cancelOperation(nil)
+            try await waitForLayout(host) { accessibility.descendant(identifier: "command-new") == nil }
+            #expect(editor.string == "/")
+            #expect(state.isExpanded)
+            #expect(window.firstResponder === editor)
+
+            editor.insertText("n", replacementRange: editor.selectedRange())
+            try await waitForLayout(host) { accessibility.descendant(identifier: "command-new") != nil }
+            #expect(accessibility.descendant(identifier: "command-stop") == nil)
+            editor.insertText("onsense", replacementRange: editor.selectedRange())
+            try await waitForLayout(host) { state.displayedCommandHeight == 0 }
+            #expect(accessibility.descendant(identifier: "command-new") == nil)
+            #expect(!accessibility.text.contains("Unknown command"))
+            #expect(editor.string == "/nonsense")
+        }
+    }
+
+    @Test func commandsAndControlCClearDraftWithoutSubmittingCommandText() async throws {
+        let backend = ControlledAssistantBackend()
+        try await withPanel(backend: backend) { state, window, host in
+            state.openPanel()
+            try await waitForLayout(host) { window.firstResponder is NSTextView }
+            let editor = try #require(window.firstResponder as? NSTextView)
+            editor.insertText("Question", replacementRange: editor.selectedRange())
+            try press(36, in: window)
+            let run = try await backend.waitForRun(at: 0)
+            run.emit("Partial answer")
+            try await waitForLayout(host) { editor.string.isEmpty }
+            let history = state.conversation.messages
+
+            editor.insertText("Unsent draft", replacementRange: editor.selectedRange())
+            editor.keyDown(with: NativeTextTestSupport.keyEvent(code: 8, characters: "\u{3}", modifiers: .control))
+            #expect(state.conversation.draft.isEmpty)
+            #expect(state.conversation.messages == history)
+            #expect(state.conversation.isBusy)
+
+            editor.insertText("/stop", replacementRange: editor.selectedRange())
+            try press(36, in: window)
+            try await waitForLayout(host) { editor.string.isEmpty }
+            #expect(!state.conversation.isBusy)
+            #expect(state.conversation.messages.map(\.text) == history.map(\.text))
+            #expect(state.conversation.messages.last?.isStopped == true)
+            #expect(window.firstResponder === editor)
+
+            editor.insertText("/new", replacementRange: editor.selectedRange())
+            try press(36, in: window)
+            try await waitForLayout(host) { editor.string.isEmpty }
+            #expect(state.conversation.messages.isEmpty)
+            #expect(state.conversationPresentation == .capture)
+            #expect(window.firstResponder === editor)
+            #expect(backend.runCount == 1)
+
+            editor.insertText("Fresh question", replacementRange: editor.selectedRange())
+            try press(36, in: window)
+            let freshRun = try await backend.waitForRun(at: 1)
+            #expect(freshRun.history.map(\.text) == ["Fresh question"])
+        }
+    }
+
     @Test func submittingFromUnreadPreviewKeepsComposerReadyForNextDraft() async throws {
         try await withPanel { state, window, host in
             state.conversation.draft = "Earlier question"
@@ -325,10 +452,11 @@ private struct PanelTestContent: View {
             editorHeightChanged: { state.editorHeight = $0 }, submit: { state.submitDraft() },
             transcriptHeightChanged: { state.naturalTranscriptHeight = $0 }
         )
-        .onChange(of: [state.editorHeight, state.composerHeight], initial: true) {
+        .onChange(of: [state.editorHeight, state.composerHeight, state.commandHeight], initial: true) {
             // Apply final allocations without running the spring/window controller.
             state.displayedEditorHeight = state.editorHeight
             state.displayedComposerHeight = state.composerHeight
+            state.displayedCommandHeight = state.commandHeight
             state.contentHeight = state.bodyLayout.height
         }
     }

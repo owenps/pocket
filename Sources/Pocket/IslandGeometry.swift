@@ -19,17 +19,18 @@ struct IslandGeometry {
         let composerHeight: CGFloat
         let transcriptHeight: CGFloat
         let transcriptGap: CGFloat
+        let commandHeight: CGFloat
 
         var editorFrameHeight: CGFloat { min(editorHeight, composerHeight) }
         var height: CGFloat {
             topInset + bottomInset + errorHeight + errorTopGap
-                + composerHeight + transcriptHeight + transcriptGap
+                + composerHeight + transcriptHeight + transcriptGap + commandHeight
         }
 
         fileprivate init(
             composerHeight: CGFloat, editorHeight: CGFloat = 0,
             transcriptHeight: CGFloat = 0, transcriptGap: CGFloat = 0,
-            notchHeight: CGFloat, includesError: Bool
+            commandHeight: CGFloat = 0, notchHeight: CGFloat, includesError: Bool
         ) {
             horizontalInset = 24
             topInset = notchHeight + 12
@@ -41,6 +42,7 @@ struct IslandGeometry {
             self.composerHeight = composerHeight
             self.transcriptHeight = transcriptHeight
             self.transcriptGap = transcriptGap
+            self.commandHeight = commandHeight
         }
     }
 
@@ -57,6 +59,7 @@ struct IslandGeometry {
             editorHeight: editorViewportHeight(sample.editorHeight),
             transcriptHeight: min(maximumTranscriptHeight, max(0, sample.transcriptHeight)),
             transcriptGap: min(maximumTranscriptGap, max(0, sample.transcriptGap)),
+            commandHeight: sample.commandHeight.isFinite ? max(0, sample.commandHeight) : 0,
             notchHeight: notchHeight, includesError: includesError
         )
     }
@@ -96,13 +99,17 @@ struct IslandGeometry {
     }
 
     func expandedSize(
-        composerHeight: CGFloat, transcriptHeight: CGFloat = 0, includesError: Bool = false
+        composerHeight: CGFloat, transcriptHeight: CGFloat = 0,
+        commandHeight: CGFloat = 0, includesError: Bool = false
     ) -> CGSize {
         // Explicit transcript allocations remain uncapped for existing frame callers.
+        let base = BodyLayout(composerHeight: composerHeight, notchHeight: notchHeight, includesError: includesError)
+        let command = commandHeight.isFinite ? max(0, commandHeight) : 0
         let body = BodyLayout(
             composerHeight: composerHeight,
             transcriptHeight: transcriptHeight > 0 ? transcriptHeight : 0,
             transcriptGap: transcriptHeight > 0 ? Self.maximumTranscriptGap : 0,
+            commandHeight: min(command, max(0, screenFrame.height - base.height)),
             notchHeight: notchHeight, includesError: includesError
         )
         return CGSize(
@@ -113,20 +120,26 @@ struct IslandGeometry {
 
     func expandedLayout(
         composerHeight: CGFloat, editorHeight: CGFloat = 0,
-        naturalTranscriptHeight: CGFloat = 0, includesError: Bool = false
+        naturalTranscriptHeight: CGFloat = 0, commandHeight: CGFloat = 0, includesError: Bool = false
     ) -> IslandLayout {
         let composer = composerHeight.isFinite ? max(0, composerHeight) : 0
         let editor = editorHeight.isFinite ? Self.editorViewportHeight(editorHeight) : 0
         let natural = naturalTranscriptHeight.isFinite ? max(0, naturalTranscriptHeight) : 0
         let baseHeight = expandedSize(composerHeight: composer, includesError: includesError).height
+        let command = min(
+            commandHeight.isFinite ? max(0, commandHeight) : 0,
+            max(0, screenFrame.height - baseHeight)
+        )
         let transcript = min(
             Self.maximumTranscriptHeight, natural,
-            max(0, screenFrame.height - baseHeight - Self.maximumTranscriptGap)
+            max(0, screenFrame.height - baseHeight - command - Self.maximumTranscriptGap)
         )
         return IslandLayout(
-            size: expandedSize(composerHeight: composer, transcriptHeight: transcript, includesError: includesError),
+            size: expandedSize(composerHeight: composer, transcriptHeight: transcript,
+                               commandHeight: command, includesError: includesError),
             composerHeight: composer, editorHeight: editor, transcriptHeight: transcript,
-            transcriptGap: transcript > 0 ? Self.maximumTranscriptGap : 0
+            transcriptGap: transcript > 0 ? Self.maximumTranscriptGap : 0,
+            commandHeight: command
         )
     }
 

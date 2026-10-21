@@ -10,6 +10,9 @@ struct DraftEditor: NSViewRepresentable {
     /// Return true only when the owner accepts the draft.
     var onSubmit: (() -> Bool)? = nil
     var onFocusConversation: (() -> Void)? = nil
+    var onMoveCommandSelection: ((Int) -> Bool)? = nil
+    var onCompleteCommand: (() -> String?)? = nil
+    var onDismissCommands: (() -> Bool)? = nil
     var fontSize: Double = Double(NSFont.preferredFont(forTextStyle: .body).pointSize)
     var userName = ""
 
@@ -38,6 +41,9 @@ struct DraftEditor: NSViewRepresentable {
         view.onHeightChange = onHeightChange
         view.editor.onSubmit = onSubmit
         view.editor.onFocusConversation = onFocusConversation
+        view.editor.onMoveCommandSelection = onMoveCommandSelection
+        view.editor.onCompleteCommand = onCompleteCommand
+        view.editor.onDismissCommands = onDismissCommands
         view.editor.userName = userName
         view.setTextIfNeeded(text)
         view.setFontSize(fontSize)
@@ -49,6 +55,9 @@ struct DraftEditor: NSViewRepresentable {
         view.editor.delegate = nil
         view.editor.onSubmit = nil
         view.editor.onFocusConversation = nil
+        view.editor.onMoveCommandSelection = nil
+        view.editor.onCompleteCommand = nil
+        view.editor.onDismissCommands = nil
         view.onHeightChange = nil
         view.cancelHeightReport()
     }
@@ -274,6 +283,9 @@ final class DraftTextView: NSTextView {
     var permitsFocus = false
     var onSubmit: (() -> Bool)?
     var onFocusConversation: (() -> Void)?
+    var onMoveCommandSelection: ((Int) -> Bool)?
+    var onCompleteCommand: (() -> String?)?
+    var onDismissCommands: (() -> Bool)?
     var userName = ""
     private var greeting = "What’s next?"
     private var hasSubmittedSinceOpening = false
@@ -291,6 +303,33 @@ final class DraftTextView: NSTextView {
 
     override func keyDown(with event: NSEvent) {
         let modifiers = event.modifierFlags.intersection([.shift, .control, .option, .command])
+        if event.keyCode == 8, modifiers == .control, isEditable {
+            if !string.isEmpty {
+                breakUndoCoalescing()
+                insertText("", replacementRange: NSRange(location: 0, length: string.utf16.count))
+                breakUndoCoalescing()
+            }
+            return
+        }
+
+        if (event.keyCode == 126 || event.keyCode == 125), modifiers.isEmpty,
+           isEditable, !hasMarkedText(),
+           onMoveCommandSelection?(event.keyCode == 126 ? -1 : 1) == true {
+            return
+        }
+
+        if event.keyCode == 48, modifiers.isEmpty, isEditable, !hasMarkedText(),
+           let completion = onCompleteCommand?() {
+            if string != completion {
+                breakUndoCoalescing()
+                insertText(completion, replacementRange: NSRange(location: 0, length: string.utf16.count))
+                breakUndoCoalescing()
+            }
+            setSelectedRange(NSRange(location: completion.utf16.count, length: 0))
+            _ = onDismissCommands?()
+            return
+        }
+
         if event.keyCode == 48, modifiers.isEmpty || modifiers == .shift,
            !hasMarkedText(), let onFocusConversation {
             onFocusConversation()
@@ -326,7 +365,9 @@ final class DraftTextView: NSTextView {
 
     override func cancelOperation(_ sender: Any?) {
         if hasMarkedText() { super.cancelOperation(sender) }
-        else { _ = nextResponder?.tryToPerform(#selector(cancelOperation(_:)), with: sender) }
+        else if onDismissCommands?() != true {
+            _ = nextResponder?.tryToPerform(#selector(cancelOperation(_:)), with: sender)
+        }
     }
 
     override var acceptsFirstResponder: Bool { permitsFocus && super.acceptsFirstResponder }

@@ -82,6 +82,56 @@ struct IslandGeometryTests {
         #expect(geometry.expandedSize(composerHeight: 0).height == 28)
     }
 
+    @Test func commandSuggestionsKeepTheirOwnAllocationAlongsideTranscript() {
+        let geometry = IslandGeometry(
+            screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982), notchHeight: 32
+        )
+        let initial = geometry.expandedLayout(composerHeight: 60, naturalTranscriptHeight: 200)
+        let layout = geometry.expandedLayout(
+            composerHeight: 60, naturalTranscriptHeight: 200, commandHeight: 96
+        )
+        let body = IslandGeometry.bodyLayout(sample: layout, notchHeight: 32)
+        #expect(layout.transcriptHeight == initial.transcriptHeight)
+        #expect(layout.transcriptGap == initial.transcriptGap)
+        #expect(layout.commandHeight == 96)
+        #expect(layout.size.height == initial.size.height + 96)
+        #expect(body.commandHeight == 96)
+        #expect(body.height == layout.size.height)
+        #expect(geometry.expandedSize(composerHeight: 60, transcriptHeight: 112, commandHeight: 96) ==
+            CGSize(width: 460, height: 338))
+    }
+
+    @Test func commandAllocationLeavesOnlyAvailableSpaceForTranscript() {
+        let geometry = IslandGeometry(screenFrame: CGRect(x: 0, y: 0, width: 320, height: 220))
+        let layout = geometry.expandedLayout(
+            composerHeight: 60, naturalTranscriptHeight: 112, commandHeight: 72, includesError: true
+        )
+        #expect(layout.commandHeight == 72)
+        #expect(layout.transcriptHeight == 2)
+        #expect(layout.transcriptGap == 10)
+        #expect(layout.size.height == 220)
+        #expect(IslandGeometry.bodyLayout(sample: layout, includesError: true).height == 220)
+
+        let capped = geometry.expandedLayout(
+            composerHeight: 60, naturalTranscriptHeight: 112, commandHeight: 1_000, includesError: true
+        )
+        #expect(capped.commandHeight == 84)
+        #expect(capped.transcriptHeight == 0 && capped.transcriptGap == 0)
+        #expect(IslandGeometry.bodyLayout(sample: capped, includesError: true).height == 220)
+        #expect(geometry.expandedSize(composerHeight: 60, commandHeight: 1_000, includesError: true).height == 220)
+    }
+
+    @Test(arguments: [CGFloat(-1), .nan, .infinity, -.infinity])
+    func invalidCommandAllocationsBecomeZero(commandHeight: CGFloat) {
+        let geometry = IslandGeometry(screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982))
+        #expect(geometry.expandedLayout(composerHeight: 60, commandHeight: commandHeight) ==
+            geometry.expandedLayout(composerHeight: 60))
+        #expect(geometry.expandedSize(composerHeight: 60, commandHeight: commandHeight) ==
+            geometry.expandedSize(composerHeight: 60))
+        let sample = IslandLayout(size: .zero, commandHeight: commandHeight)
+        #expect(IslandGeometry.bodyLayout(sample: sample).commandHeight == 0)
+    }
+
     @Test func conversationAddsBoundedSpaceWithoutMovingTopAnchor() {
         let screen = CGRect(x: -1512, y: -982, width: 1512, height: 982)
         let geometry = IslandGeometry(screenFrame: screen, notchHeight: 32)

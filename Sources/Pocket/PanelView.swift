@@ -98,6 +98,24 @@ struct PanelView: View {
                 .id(state.conversationPresentation == .unread)
             }
 
+            ZStack(alignment: .top) {
+                if let suggestions = state.commandSuggestions {
+                    CommandSuggestionsView(
+                        commands: suggestions, selectedCommand: state.selectedCommand,
+                        fontSize: state.fontSize, rowHeight: state.commandRowHeight
+                    ) { command in
+                        state.updateDraft(command.rawValue)
+                        _ = submit()
+                        state.focusComposer()
+                    }
+                    .padding(.leading, (state.showBuddy ? state.avatar.size.points + 12 : 0) - 6)
+                    .padding(.trailing, -6)
+                    .padding(.bottom, 6)
+                }
+            }
+            .frame(height: layout.commandHeight, alignment: .top)
+            .clipped()
+
             HStack(alignment: .top, spacing: 12) {
                 if state.showBuddy {
                     AvatarView(appearance: state.avatar, behavior: buddyBehavior)
@@ -107,12 +125,15 @@ struct PanelView: View {
                 }
 
                 DraftEditor(
-                    text: $conversation.draft,
+                    text: Binding(get: { conversation.draft }, set: { state.updateDraft($0) }),
                     isEditing: state.isExpanded,
                     focusRequest: state.focusRequest,
                     onHeightChange: editorHeightChanged,
                     onSubmit: submit,
                     onFocusConversation: { state.focusConversation() },
+                    onMoveCommandSelection: { state.moveCommandSelection(by: $0) },
+                    onCompleteCommand: { state.selectedCommand?.rawValue },
+                    onDismissCommands: { state.dismissCommands() },
                     fontSize: state.fontSize,
                     userName: state.userName
                 )

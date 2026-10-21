@@ -61,7 +61,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     }
 
     func start() {
-        observeComposerHeight()
+        observeContentHeight()
         updateGeometry()
         resize(animated: false)
         // A quiet island at launch, without taking keyboard focus.
@@ -117,13 +117,15 @@ final class PanelController: NSObject, NSWindowDelegate {
         state.editorHeight = height
     }
 
-    private func observeComposerHeight() {
+    private func observeContentHeight() {
         withObservationTracking {
             _ = state.composerHeight
+            _ = state.topContentHeight
+            _ = state.commandHeight
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.observeComposerHeight()
+                self.observeContentHeight()
                 if self.state.isExpanded { self.resize(animated: self.panel.isVisible) }
             }
         }
@@ -133,8 +135,6 @@ final class PanelController: NSObject, NSWindowDelegate {
         guard height.isFinite, height >= 0,
               abs(state.naturalTranscriptHeight - height) >= 0.5 else { return }
         state.naturalTranscriptHeight = height
-        // Hidden measurements prepare the next opening, never start idle animation.
-        if state.isExpanded { resize(animated: panel.isVisible) }
     }
 
     func stop() {
@@ -176,7 +176,8 @@ final class PanelController: NSObject, NSWindowDelegate {
             expandedLayout = geometry.expandedLayout(
                 composerHeight: state.composerHeight,
                 editorHeight: state.editorHeight,
-                naturalTranscriptHeight: state.presentedMessages.isEmpty ? 0 : state.naturalTranscriptHeight,
+                naturalTranscriptHeight: state.topContentHeight,
+                commandHeight: state.commandHeight,
                 includesError: state.shortcutError != nil
             )
         }
@@ -228,6 +229,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             state.expandedSize = expandedLayout.size
             state.displayedEditorHeight = body.editorHeight
             state.displayedComposerHeight = body.composerHeight
+            state.displayedCommandHeight = body.commandHeight
             state.transcriptHeight = body.transcriptHeight
             state.transcriptGap = body.transcriptGap
             state.contentHeight = body.height

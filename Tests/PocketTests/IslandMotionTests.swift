@@ -9,9 +9,9 @@ struct IslandMotionTests {
     private let tolerance = 1e-8
     private let collapsed = IslandLayout(size: CGSize(width: 148, height: 28), composerHeight: 0)
     private let open = IslandLayout(size: CGSize(width: 500, height: 300),
-                                    composerHeight: 60, editorHeight: 40, transcriptHeight: 180, transcriptGap: 12)
+                                    composerHeight: 60, editorHeight: 40, transcriptHeight: 156, transcriptGap: 12, commandHeight: 24)
     private let tall = IslandLayout(size: CGSize(width: 540.25, height: 500.75),
-                                    composerHeight: 140.25, editorHeight: 120.25, transcriptHeight: 300.5, transcriptGap: 12)
+                                    composerHeight: 140.25, editorHeight: 120.25, transcriptHeight: 260.5, transcriptGap: 12, commandHeight: 40)
     private var zeroVelocity: IslandLayout { IslandLayout(size: .zero, composerHeight: 0) }
 
     @Test func initializesAtRequestedLayoutAndRest() {
@@ -221,13 +221,14 @@ struct IslandMotionTests {
         expectSettled(motion, at: redistributed)
     }
 
-    @Test(arguments: ["transcript", "gap"])
+    @Test(arguments: ["transcript", "gap", "command"])
     func eachInternalAllocationCanKeepTheClockActive(field: String) {
         var motion = IslandMotion(layout: open)
         var target = open
         switch field {
         case "transcript": target.transcriptHeight += 24
-        default: target.transcriptGap += 24
+        case "gap": target.transcriptGap += 24
+        default: target.commandHeight += 24
         }
         motion.retarget(to: target, expanded: true)
         #expect(!motion.isSettled)
@@ -238,6 +239,32 @@ struct IslandMotionTests {
         #expect(!motion.isSettled)
         advanceUntilSettled(&motion)
         expectSettled(motion, at: target)
+    }
+
+    @Test func commandSuggestionsAnimateAndReverseWithoutReplacingTranscript() {
+        let geometry = IslandGeometry(screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982))
+        let initial = geometry.expandedLayout(composerHeight: 60, naturalTranscriptHeight: 100)
+        let target = geometry.expandedLayout(composerHeight: 60, naturalTranscriptHeight: 100, commandHeight: 96)
+        var motion = IslandMotion(layout: initial)
+        expectContinuousRetarget(&motion, to: target, expanded: true)
+        for _ in 0..<10 {
+            motion.advance(by: step)
+            expectCoherentAllocations(motion, chrome: 28)
+            #expect(motion.layout.transcriptHeight == initial.transcriptHeight)
+            #expect(motion.layout.transcriptGap == initial.transcriptGap)
+            #expect(motion.velocity.transcriptHeight == 0)
+            #expect(motion.velocity.transcriptGap == 0)
+        }
+        #expect(motion.layout.commandHeight > 0 && motion.layout.commandHeight < 96)
+        #expect(motion.velocity.commandHeight > 0)
+        expectContinuousRetarget(&motion, to: initial, expanded: true)
+        for _ in 0..<1_200 {
+            motion.advance(by: step)
+            expectCoherentAllocations(motion, chrome: 28)
+            expectFinite(motion)
+            if motion.isSettled { break }
+        }
+        expectSettled(motion, at: initial)
     }
 
     @Test func viewportSumsTrackOuterHeightFromOpenRestThroughRetargets() {
@@ -345,7 +372,7 @@ struct IslandMotionTests {
         motion.advance(by: step)
         let before = motion
         for invalidValue in [-1.0, Double.nan, Double.infinity, -Double.infinity] {
-            for field in 0..<6 {
+            for field in 0..<7 {
                 var invalid = tall
                 switch field {
                 case 0: invalid.size.width = CGFloat(invalidValue)
@@ -353,7 +380,8 @@ struct IslandMotionTests {
                 case 2: invalid.composerHeight = CGFloat(invalidValue)
                 case 3: invalid.editorHeight = CGFloat(invalidValue)
                 case 4: invalid.transcriptHeight = CGFloat(invalidValue)
-                default: invalid.transcriptGap = CGFloat(invalidValue)
+                case 5: invalid.transcriptGap = CGFloat(invalidValue)
+                default: invalid.commandHeight = CGFloat(invalidValue)
                 }
                 motion.retarget(to: invalid, expanded: false, animated: false)
                 expectSameState(motion, before)
@@ -448,7 +476,8 @@ struct IslandMotionTests {
 
     private func values(_ layout: IslandLayout) -> [Double] {
         [Double(layout.size.width), Double(layout.size.height), Double(layout.composerHeight),
-         Double(layout.editorHeight), Double(layout.transcriptHeight), Double(layout.transcriptGap)]
+         Double(layout.editorHeight), Double(layout.transcriptHeight), Double(layout.transcriptGap),
+         Double(layout.commandHeight)]
     }
 
     private func frame(_ layout: IslandLayout) -> CGRect {
@@ -480,8 +509,8 @@ struct IslandMotionTests {
     private func expectCoherentAllocations(_ motion: IslandMotion, chrome: Double) {
         let layout = motion.layout
         let velocity = motion.velocity
-        #expect(abs(Double(layout.size.height - layout.composerHeight - layout.transcriptHeight - layout.transcriptGap) - chrome) < tolerance)
-        #expect(abs(Double(velocity.size.height - velocity.composerHeight - velocity.transcriptHeight - velocity.transcriptGap)) < tolerance)
+        #expect(abs(Double(layout.size.height - layout.composerHeight - layout.transcriptHeight - layout.transcriptGap - layout.commandHeight) - chrome) < tolerance)
+        #expect(abs(Double(velocity.size.height - velocity.composerHeight - velocity.transcriptHeight - velocity.transcriptGap - velocity.commandHeight)) < tolerance)
     }
 
     private func expectFinite(_ motion: IslandMotion) {

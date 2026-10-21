@@ -54,9 +54,65 @@ final class PanelState {
     var editorHeight: CGFloat
     var displayedEditorHeight: CGFloat
     var displayedComposerHeight: CGFloat
+    var displayedCommandHeight: CGFloat = 0
+    private var commandSelection: (draft: String, command: ConversationCommand)?
+    private var dismissedCommandDraft: String?
 
     var composerHeight: CGFloat {
         max(editorHeight, showBuddy ? avatar.size.points : 0)
+    }
+
+    var commandSuggestions: [ConversationCommand]? {
+        guard dismissedCommandDraft != conversation.draft,
+              let suggestions = ConversationCommand.suggestions(for: conversation.draft),
+              !suggestions.isEmpty else { return nil }
+        return suggestions
+    }
+
+    var selectedCommand: ConversationCommand? {
+        guard let suggestions = commandSuggestions else { return nil }
+        if let commandSelection, commandSelection.draft == conversation.draft,
+           suggestions.contains(commandSelection.command) {
+            return commandSelection.command
+        }
+        return suggestions.first
+    }
+
+    var commandRowHeight: CGFloat {
+        DraftEditor.singleLineHeight(fontSize: fontSize) + 6
+    }
+
+    var commandHeight: CGFloat {
+        guard let commandSuggestions else { return 0 }
+        return CGFloat(commandSuggestions.count) * commandRowHeight + 6
+    }
+
+    var topContentHeight: CGFloat {
+        presentedMessages.isEmpty ? 0 : naturalTranscriptHeight
+    }
+
+    func updateDraft(_ text: String) {
+        guard conversation.draft != text else { return }
+        commandSelection = nil
+        dismissedCommandDraft = nil
+        conversation.draft = text
+    }
+
+    @discardableResult
+    func moveCommandSelection(by offset: Int) -> Bool {
+        guard let suggestions = commandSuggestions, let selectedCommand,
+              let index = suggestions.firstIndex(of: selectedCommand) else { return false }
+        let next = (index + offset % suggestions.count + suggestions.count) % suggestions.count
+        commandSelection = (conversation.draft, suggestions[next])
+        return true
+    }
+
+    @discardableResult
+    func dismissCommands() -> Bool {
+        guard commandSuggestions != nil else { return false }
+        dismissedCommandDraft = conversation.draft
+        commandSelection = nil
+        return true
     }
 
     var naturalTranscriptHeight: CGFloat = 0
@@ -73,7 +129,7 @@ final class PanelState {
         IslandGeometry.bodyLayout(
             sample: IslandLayout(size: surfaceRect.size, composerHeight: displayedComposerHeight,
                                  editorHeight: displayedEditorHeight, transcriptHeight: transcriptHeight,
-                                 transcriptGap: transcriptGap),
+                                 transcriptGap: transcriptGap, commandHeight: displayedCommandHeight),
             notchHeight: notchHeight, includesError: shortcutError != nil
         )
     }
@@ -136,6 +192,8 @@ final class PanelState {
     func closePanel() {
         isExpanded = false
         transcriptFocusRequest = 0
+        commandSelection = nil
+        dismissedCommandDraft = nil
     }
 
     func markReplyViewed(_ id: UUID) {
@@ -146,18 +204,35 @@ final class PanelState {
 
     @discardableResult
     func submitDraft() -> Bool {
+        if let selectedCommand { conversation.draft = selectedCommand.rawValue }
+        let command = ConversationCommand(rawValue: conversation.draft.trimmingCharacters(in: .whitespacesAndNewlines))
         guard conversation.submitDraft() else { return false }
-        if conversationPresentation != .thread { naturalTranscriptHeight = 0 }
-        conversationPresentation = .thread
+        switch command {
+        case .new:
+            resetPresentation()
+        case .stop:
+            break
+        case nil:
+            if conversationPresentation != .thread { naturalTranscriptHeight = 0 }
+            conversationPresentation = .thread
+        }
+        commandSelection = nil
+        dismissedCommandDraft = nil
         editorHeight = DraftEditor.singleLineHeight(fontSize: fontSize)
         return true
     }
 
     func resetConversation() {
         conversation.reset()
+        resetPresentation()
+    }
+
+    private func resetPresentation() {
         conversationPresentation = .capture
         naturalTranscriptHeight = 0
         transcriptFocusRequest = 0
+        commandSelection = nil
+        dismissedCommandDraft = nil
         focusComposer()
     }
 

@@ -33,7 +33,17 @@ final class ConversationSession {
 
     @discardableResult
     func submitDraft() -> Bool {
-        guard !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        let input = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !input.isEmpty else { return false }
+        if input.hasPrefix("/") {
+            guard let command = ConversationCommand(rawValue: input) else { return false }
+            switch command {
+            case .new: reset()
+            case .stop: stopReply()
+            }
+            draft = ""
+            return true
+        }
         let reply = ConversationMessage(role: .assistant, text: "")
         guard let transition = execution.transition(.start(runID: UUID(), replyID: reply.id)) else { return false }
         messages.append(ConversationMessage(role: .user, text: draft))

@@ -6,18 +6,21 @@ struct IslandLayout: Equatable {
     var editorHeight: CGFloat
     var transcriptHeight: CGFloat
     var transcriptGap: CGFloat
+    /// Entire suggestion allocation, including bottom spacing; independent of transcript.
+    var commandHeight: CGFloat
 
     init(size: CGSize, composerHeight: CGFloat = 0, editorHeight: CGFloat = 0,
-         transcriptHeight: CGFloat = 0, transcriptGap: CGFloat = 0) {
+         transcriptHeight: CGFloat = 0, transcriptGap: CGFloat = 0, commandHeight: CGFloat = 0) {
         self.size = size
         self.composerHeight = composerHeight
         self.editorHeight = editorHeight
         self.transcriptHeight = transcriptHeight
         self.transcriptGap = transcriptGap
+        self.commandHeight = commandHeight
     }
 
     fileprivate var isValid: Bool {
-        [size.width, size.height, composerHeight, editorHeight, transcriptHeight, transcriptGap]
+        [size.width, size.height, composerHeight, editorHeight, transcriptHeight, transcriptGap, commandHeight]
             .allSatisfy { $0.isFinite && $0 >= 0 }
     }
 }
@@ -67,12 +70,12 @@ struct IslandMotion {
         // Huge finite intervals can overflow the native phase calculation; physically
         // they mean rest. Otherwise leave elastic values (including overshoot) intact.
         guard width.isFinite, widthVelocity.isFinite,
-              (0..<5).allSatisfy({ heights.values[$0].isFinite && heightVelocity.values[$0].isFinite }) else {
+              (0..<6).allSatisfy({ heights.values[$0].isFinite && heightVelocity.values[$0].isFinite }) else {
             settle()
             return
         }
         if abs(width - Double(targetLayout.size.width)) < 0.001, abs(widthVelocity) < 0.01,
-           (0..<5).allSatisfy({ abs(heights.values[$0] - targetHeights.values[$0]) < 0.001
+           (0..<6).allSatisfy({ abs(heights.values[$0] - targetHeights.values[$0]) < 0.001
                && abs(heightVelocity.values[$0]) < 0.01 }) {
             settle()
         }
@@ -97,7 +100,7 @@ struct IslandMotion {
     private static func heightVector(for layout: IslandLayout) -> HeightVector {
         HeightVector(values: SIMD8(Double(layout.size.height), Double(layout.composerHeight),
                                    Double(layout.editorHeight), Double(layout.transcriptHeight),
-                                   Double(layout.transcriptGap), 0, 0, 0))
+                                   Double(layout.transcriptGap), Double(layout.commandHeight), 0, 0))
     }
 
     private static func layout(width: Double, heights: HeightVector) -> IslandLayout {
@@ -105,7 +108,8 @@ struct IslandMotion {
                      composerHeight: CGFloat(heights.values[1]),
                      editorHeight: CGFloat(heights.values[2]),
                      transcriptHeight: CGFloat(heights.values[3]),
-                     transcriptGap: CGFloat(heights.values[4]))
+                     transcriptGap: CGFloat(heights.values[4]),
+                     commandHeight: CGFloat(heights.values[5]))
     }
 }
 
@@ -125,6 +129,6 @@ private struct HeightVector: VectorArithmetic {
 
     var magnitudeSquared: Double {
         let squares = values * values
-        return squares[0] + squares[1] + squares[2] + squares[3] + squares[4]
+        return squares[0] + squares[1] + squares[2] + squares[3] + squares[4] + squares[5]
     }
 }
