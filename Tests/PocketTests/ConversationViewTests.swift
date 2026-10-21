@@ -528,6 +528,27 @@ struct ConversationViewTests {
         #expect(receipts == [reply.id])
     }
 
+    @Test(arguments: [false, true])
+    func unhideDoesNotStealFocusOrAcknowledgeAfterHidingOrCleanup(cleanUp: Bool) async {
+        let view = makeTranscript(height: 112)
+        let window = attach(view, shown: true)
+        defer { view.cleanUp(); window.contentView = nil }
+        view.isHidden = true
+        var receipts: [UUID] = []
+        view.configure(animateThinking: false, onReplyViewed: { receipts.append($0) })
+        view.setConversation([ConversationMessage(role: .assistant, text: "Ready")], phase: .idle)
+        view.setExpanded(true, focusRequest: 1)
+        let composer = NSTextView(frame: NSRect(x: 0, y: 0, width: 20, height: 20))
+        window.contentView?.addSubview(composer)
+        #expect(window.makeFirstResponder(composer))
+
+        view.isHidden = false
+        if cleanUp { view.cleanUp() } else { view.isHidden = true }
+        await drainMainQueue()
+        #expect(window.firstResponder === composer)
+        #expect(receipts.isEmpty)
+    }
+
     @Test func deferredReceiptsRecheckVisibilityPhaseIdentityAndCleanup() async {
         let view = makeTranscript(height: 112)
         let window = attach(view, shown: true)

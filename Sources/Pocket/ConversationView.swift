@@ -141,7 +141,10 @@ final class ConversationScrollView: NSScrollView {
 
     override func viewDidUnhide() {
         super.viewDidUnhide()
-        visibilityChanged()
+        // Descendants can still report hidden until AppKit finishes unhiding.
+        DispatchQueue.main.async { [weak self] in
+            self?.visibilityChanged()
+        }
     }
 
     func configure(animateThinking: Bool = true, onReplyViewed: ((UUID) -> Void)? = nil,
