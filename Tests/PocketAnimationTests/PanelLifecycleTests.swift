@@ -70,6 +70,9 @@ struct PanelLifecycleTests {
     func shortcutOpensRefocusesAndClosesWhileFocusLossHonorsPreference(keepOpen: Bool) async throws {
         try await NativeUITestSupport.withDesktop {
             let app = NSApplication.shared
+            let policy = app.activationPolicy()
+            app.setActivationPolicy(.accessory)
+            defer { app.setActivationPolicy(policy) }
             let name = "PanelFocusTests.\(UUID().uuidString)"
             let defaults = try #require(UserDefaults(suiteName: name))
             defer { defaults.removePersistentDomain(forName: name) }
@@ -97,16 +100,34 @@ struct PanelLifecycleTests {
                 other.close()
             }
 
+            @MainActor func waitForFocus(_ phase: String, until condition: () -> Bool) throws {
+                do {
+                    try NativeUITestSupport.wait(until: condition)
+                } catch {
+                    let responder = window.firstResponder.map { String(describing: type(of: $0)) } ?? "nil"
+                    throw FocusTransitionFailure(description:
+                        "\(phase) (keepOpen=\(keepOpen)): \(error) " +
+                        "policy=\(app.activationPolicy().rawValue), active=\(app.isActive), " +
+                        "expanded=\(state.isExpanded), panelKey=\(window.isKeyWindow), " +
+                        "otherKey=\(other.isKeyWindow), responder=\(responder)"
+                    )
+                }
+            }
+
+            // Unlike the nonactivating panel, the ordinary focus-target window needs an active app.
+            app.activate(ignoringOtherApps: true)
+            try waitForFocus("activate test application") { app.isActive }
+
             controller.toggle()
-            try NativeUITestSupport.wait { state.isExpanded && window.isKeyWindow }
+            try waitForFocus("shortcut opens panel") { state.isExpanded && window.isKeyWindow }
             other.makeKeyAndOrderFront(nil)
-            try NativeUITestSupport.wait { other.isKeyWindow && !window.isKeyWindow }
+            try waitForFocus("transfer focus away") { other.isKeyWindow && !window.isKeyWindow }
             #expect(state.isExpanded == keepOpen)
             #expect(window.isVisible)
             #expect(state.conversation.draft == "Keep this draft")
 
             controller.toggle()
-            try NativeUITestSupport.wait {
+            try waitForFocus("shortcut reopens/refocuses panel") {
                 state.isExpanded && window.isKeyWindow && window.firstResponder is DraftTextView
             }
             #expect(state.conversation.draft == "Keep this draft")
@@ -114,11 +135,15 @@ struct PanelLifecycleTests {
             #expect(!state.isExpanded)
 
             controller.toggle()
-            try NativeUITestSupport.wait { state.isExpanded && window.isKeyWindow }
+            try waitForFocus("shortcut opens before Escape") { state.isExpanded && window.isKeyWindow }
             window.cancelOperation(nil)
             #expect(!state.isExpanded)
             #expect(state.conversation.draft == "Keep this draft")
         }
+    }
+
+    private struct FocusTransitionFailure: Error, CustomStringConvertible {
+        let description: String
     }
 
     private func draftEditor(in view: NSView) -> DraftTextView? {

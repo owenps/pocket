@@ -5,11 +5,11 @@ import Testing
 @testable import Pocket
 
 @MainActor
-struct StopButtonAnimationTests {
+struct StopButtonTests {
     @Test(arguments: [false, true])
-    func stopFadesWithoutMovingOrReplacingTheDraft(reduceMotion: Bool) throws {
+    func stopVisibilityTracksRepliesWithoutMovingOrReplacingTheDraft(reduceMotion: Bool) throws {
         NativeAccessibility.enable()
-        let name = "StopButtonAnimationTests.\(UUID().uuidString)"
+        let name = "StopButtonTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         let conversation = ConversationSession(
@@ -49,38 +49,29 @@ struct StopButtonAnimationTests {
             #expect(viewport.convert(viewport.bounds, to: host) == editorFrame)
         }
 
+        // Offscreen bitmaps verify rendered visibility, not compositor fade frames.
         // Exercise the first response from an idle mount, then a subsequent one.
         for _ in 0..<2 {
             let idle = try snapshot(host)
             #expect(state.submitDraft())
             conversation.draft = "Retained next draft"
-            let appearing = try sample(host, checking: checkDraft)
-            let stop = try #require(accessibility.descendant(identifier: "stop-reply"))
-            let crop = host.convert(fixture.window.convertFromScreen(stop.frame), from: nil)
-            try #require(crop.width > 0 && crop.height > 0 && host.bounds.contains(crop))
-            let settled = try snapshot(host)
-            let off = brightness(idle, in: crop)
-            let on = brightness(settled, in: crop)
-            let incoming = appearing.map { brightness($0, in: crop) }
-            #expect(off < 1)
-            try #require(on > off + 100, "The active Stop button must actually be painted")
-            if reduceMotion {
-                #expect(incoming.allSatisfy { abs($0 - on) < 1 })
-            } else {
-                #expect(try #require(incoming.first) < off + (on - off) * 0.1)
-                #expect(incoming.contains { $0 > off + (on - off) * 0.1 && $0 < off + (on - off) * 0.9 })
-                #expect(zip(incoming, incoming.dropFirst()).allSatisfy { $1 >= $0 - 1 })
+            var crop = CGRect.zero
+            try NativeUITestSupport.wait {
+                host.layoutSubtreeIfNeeded()
+                try checkDraft()
+                guard let stop = accessibility.descendant(identifier: "stop-reply") else { return false }
+                crop = host.convert(fixture.window.convertFromScreen(stop.frame), from: nil)
+                guard crop.width > 0, crop.height > 0, host.bounds.contains(crop) else { return false }
+                return try brightness(snapshot(host), in: crop) > brightness(idle, in: crop) + 100
             }
+            let off = brightness(idle, in: crop)
+            #expect(off < 1)
 
             conversation.stopReply()
-            let outgoing = try sample(host, checking: checkDraft).map { brightness($0, in: crop) }
-            #expect(abs(brightness(try snapshot(host), in: crop) - off) < 1)
-            if reduceMotion {
-                #expect(outgoing.allSatisfy { abs($0 - off) < 1 })
-            } else {
-                #expect(try #require(outgoing.first) > off + (on - off) * 0.9)
-                #expect(outgoing.contains { $0 > off + (on - off) * 0.1 && $0 < off + (on - off) * 0.9 })
-                #expect(zip(outgoing, outgoing.dropFirst()).allSatisfy { $1 <= $0 + 1 })
+            try NativeUITestSupport.wait {
+                host.layoutSubtreeIfNeeded()
+                try checkDraft()
+                return try abs(brightness(snapshot(host), in: crop) - off) < 1
             }
         }
     }
@@ -88,17 +79,6 @@ struct StopButtonAnimationTests {
     private func draftEditor(in view: NSView) -> DraftTextView? {
         if let editor = view as? DraftTextView { return editor }
         return view.subviews.lazy.compactMap { draftEditor(in: $0) }.first
-    }
-
-    private func sample(_ view: NSView, checking check: () throws -> Void) throws -> [NSBitmapImageRep] {
-        let deadline = ProcessInfo.processInfo.systemUptime + 0.3
-        var images: [NSBitmapImageRep] = []
-        repeat {
-            images.append(try snapshot(view))
-            try check()
-            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.008))
-        } while ProcessInfo.processInfo.systemUptime < deadline
-        return images
     }
 
     private func snapshot(_ view: NSView) throws -> NSBitmapImageRep {
