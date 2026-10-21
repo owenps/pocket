@@ -7,6 +7,8 @@ struct BuddyEntranceMotionTests {
         var motion = BuddyEntranceMotion()
         let hidden = BuddyEntranceMotion.pose(at: motion.progress)
         #expect(hidden == .init(opacity: 0, scale: 0.72, offsetY: 6))
+        motion.update(expanded: true, contentVisibility: 1, elapsed: 0.05)
+        #expect(motion.progress == 0)
         motion.update(expanded: true, contentVisibility: 1, elapsed: 0.22)
         let peak = BuddyEntranceMotion.pose(at: motion.progress)
         #expect(peak.opacity == 1)
@@ -16,9 +18,28 @@ struct BuddyEntranceMotionTests {
         motion.update(expanded: true, contentVisibility: 1, elapsed: 0.09)
         let settling = BuddyEntranceMotion.pose(at: motion.progress)
         #expect(settling.scale > 1 && settling.scale < peak.scale)
-        motion.update(expanded: true, contentVisibility: 1, elapsed: 0.09)
-        #expect(BuddyEntranceMotion.pose(at: motion.progress) == .init(opacity: 1, scale: 1, offsetY: 0))
+        var completed = BuddyEntranceMotion()
+        completed.update(expanded: true, contentVisibility: 1, elapsed: 0.45)
+        #expect(BuddyEntranceMotion.pose(at: completed.progress) == .init(opacity: 1, scale: 1, offsetY: 0))
+        #expect(!completed.isActive)
+    }
+
+    @Test func delayStartsAtRevealAndSurvivesPartialCloseWithoutRestarting() {
+        var motion = BuddyEntranceMotion()
+        motion.update(expanded: true, contentVisibility: 0.49, elapsed: 10)
+        #expect(motion.progress == 0)
+        motion.update(expanded: true, contentVisibility: 0.5, elapsed: 0.03)
+        #expect(motion.progress == 0)
+        #expect(motion.isActive)
+        motion.update(expanded: false, contentVisibility: 0.2, elapsed: 10)
         #expect(!motion.isActive)
+        motion.update(expanded: true, contentVisibility: 0.2, elapsed: 0.01)
+        #expect(motion.progress == 0)
+        motion.update(expanded: true, contentVisibility: 1, elapsed: 0.02)
+        #expect(abs(motion.progress - 0.025) < 0.0001)
+        motion.update(expanded: false, contentVisibility: 0)
+        motion.update(expanded: true, contentVisibility: 1, elapsed: 0.04)
+        #expect(motion.progress == 0)
     }
 
     @Test func popRemainsBoundedThroughoutArrivalAndSettle() {
@@ -36,7 +57,7 @@ struct BuddyEntranceMotionTests {
 
     @Test func reducedMotionIsAnUnscaledStationaryOneHundredEightyMillisecondFade() {
         var motion = BuddyEntranceMotion()
-        motion.update(expanded: true, contentVisibility: 1, elapsed: 0.09)
+        motion.update(expanded: true, contentVisibility: 1, elapsed: 0.14)
         let halfway = BuddyEntranceMotion.pose(at: motion.progress, reduceMotion: true)
         #expect(abs(halfway.opacity - 0.5) < 0.0001)
         motion.update(expanded: true, contentVisibility: 1, elapsed: 0.09)
@@ -81,14 +102,14 @@ struct BuddyEntranceMotionTests {
         #expect(motion.isActive)
         motion.update(expanded: true, contentVisibility: 1)
         #expect(motion.progress == 0)
-        motion.update(expanded: true, contentVisibility: 1, elapsed: 0.04)
+        motion.update(expanded: true, contentVisibility: 1, elapsed: 0.09)
         #expect(motion.progress > 0 && motion.progress < 1)
     }
 
     @Test(arguments: [false, true])
     func partialCloseFreezesAndReopeningResumesWithoutReplay(completed: Bool) {
         var motion = BuddyEntranceMotion()
-        motion.update(expanded: true, contentVisibility: 1, elapsed: completed ? 1 : 0.04)
+        motion.update(expanded: true, contentVisibility: 1, elapsed: completed ? 1 : 0.09)
         let retained = motion.progress
         for visibility in [0.8, 0.2] {
             motion.update(expanded: false, contentVisibility: visibility, elapsed: 10)
@@ -110,20 +131,20 @@ struct BuddyEntranceMotionTests {
     @Test(arguments: [false, true])
     func fullyHiddenCloseRearmsNextOpening(completed: Bool) {
         var motion = BuddyEntranceMotion()
-        motion.update(expanded: true, contentVisibility: 1, elapsed: completed ? 1 : 0.04)
+        motion.update(expanded: true, contentVisibility: 1, elapsed: completed ? 1 : 0.09)
         motion.update(expanded: false, contentVisibility: 0)
         #expect(motion.progress == 0)
         #expect(!motion.isActive)
         motion.update(expanded: true, contentVisibility: 0, elapsed: 1)
         #expect(motion.progress == 0)
         #expect(motion.isActive)
-        motion.update(expanded: true, contentVisibility: 1, elapsed: 0.04)
+        motion.update(expanded: true, contentVisibility: 1, elapsed: 0.09)
         #expect(motion.progress > 0 && motion.progress < 1)
     }
 
     @Test func repeatedExpandedUpdatesDoNotRestartEntrance() {
         var motion = BuddyEntranceMotion()
-        motion.update(expanded: true, contentVisibility: 1, elapsed: 0.04)
+        motion.update(expanded: true, contentVisibility: 1, elapsed: 0.09)
         let retained = motion.progress
         for visibility in [1.0, 0.8, 0.3, 0, 1] {
             motion.update(expanded: true, contentVisibility: visibility)
@@ -136,7 +157,7 @@ struct BuddyEntranceMotionTests {
 
     @Test func invalidElapsedIsIgnoredAndDelayedFramesCatchUp() {
         var motion = BuddyEntranceMotion()
-        motion.update(expanded: true, contentVisibility: 1, elapsed: 0.04)
+        motion.update(expanded: true, contentVisibility: 1, elapsed: 0.09)
         let retained = motion.progress
         for elapsed in [0.0, -0.1, Double.nan, Double.infinity, -Double.infinity] {
             motion.update(expanded: true, contentVisibility: 1, elapsed: elapsed)

@@ -7,6 +7,7 @@ struct BuddyEntranceMotion {
     private var expanded = false
     private var revealed = false
     private var elapsedTime: TimeInterval = 0
+    private let delay: TimeInterval = 0.05
     private let duration: TimeInterval = 0.4
 
     var isActive: Bool { expanded && progress < 1 }
@@ -54,7 +55,7 @@ struct BuddyEntranceMotion {
         // separate entrance after the panel opens.
         revealed = revealed || contentVisibility >= 0.5
         guard revealed, progress < 1, elapsed.isFinite, elapsed > 0 else { return }
-        elapsedTime = min(duration, elapsedTime + elapsed)
-        progress = elapsedTime / duration
+        elapsedTime = min(delay + duration, elapsedTime + elapsed)
+        progress = min(1, max(0, (elapsedTime - delay) / duration))
     }
 }
