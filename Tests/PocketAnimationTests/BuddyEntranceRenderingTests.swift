@@ -55,7 +55,8 @@ struct BuddyEntranceRenderingTests {
         var frames: [CGRect] = []
         var editors: [NSTextView] = []
         let hostFrame = host.frame
-        for progress in [0.0, 0.1, 0.55, 1.0] {
+        let peakProgress = (reduceMotion ? 0.18 : 0.14) / 0.34
+        for progress in [0.0, 0.1, peakProgress, 1.0] {
             var transaction = Transaction(animation: nil)
             transaction.disablesAnimations = true
             withTransaction(transaction) { state.buddyEntranceProgress = progress }
@@ -86,6 +87,15 @@ struct BuddyEntranceRenderingTests {
         let arriving = ink(in: images[1], rect: envelope)
         let peak = ink(in: images[2], rect: envelope)
         let visible = ink(in: images[3], rect: envelope)
+        let topRay = CGRect(x: buddy.midX - 2, y: buddy.minY - 4, width: 4, height: 2)
+        let burstMass = ink(in: images[2], rect: topRay).mass
+        if reduceMotion {
+            #expect(burstMass < 0.01)
+        } else {
+            #expect(burstMass > 1)
+        }
+        #expect(ink(in: images[0], rect: topRay).mass < 0.01)
+        #expect(ink(in: images[3], rect: topRay).mass < 0.01)
         #expect(hidden.mass < 0.01)
         try #require(visible.mass > 100)
         #expect(arriving.mass > 1 && arriving.mass < visible.mass)

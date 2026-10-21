@@ -122,6 +122,9 @@ struct PanelView: View {
                         .scaleEffect(entrance.scale, anchor: UnitPoint(x: 0.5, y: 0.8))
                         .offset(y: entrance.offsetY)
                         .opacity(entrance.opacity)
+                        .background {
+                            BuddyEntranceBurst(palette: state.avatar.palette, progress: state.buddyEntranceProgress)
+                        }
                 }
 
                 DraftEditor(

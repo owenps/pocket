@@ -8,7 +8,8 @@ struct BuddyEntranceMotion {
     private var revealed = false
     private var elapsedTime: TimeInterval = 0
     private let delay: TimeInterval = 0.05
-    private let duration: TimeInterval = 0.4
+    private static let duration: TimeInterval = 0.34
+    private static let arrivalDuration: TimeInterval = 0.14
 
     var isActive: Bool { expanded && progress < 1 }
 
@@ -16,6 +17,11 @@ struct BuddyEntranceMotion {
         var opacity: Double
         var scale: Double
         var offsetY: Double
+    }
+
+    struct Burst: Equatable {
+        var opacity: Double
+        var travel: Double
     }
 
     private static let arrival = UnitCurve.bezier(
@@ -27,16 +33,27 @@ struct BuddyEntranceMotion {
 
     static func pose(at progress: Double, reduceMotion: Bool = false) -> Pose {
         let progress = min(1, max(0, progress))
+        let elapsed = progress * duration
         if reduceMotion {
             // Keep the prototype's 180ms fade, without scale or travel.
-            return Pose(opacity: min(1, progress / 0.45), scale: 1, offsetY: 0)
+            return Pose(opacity: min(1, elapsed / 0.18), scale: 1, offsetY: 0)
         }
-        if progress < 0.55 {
-            let arrival = arrival.value(at: progress / 0.55)
-            return Pose(opacity: arrival, scale: 0.72 + 0.38 * arrival, offsetY: 6 * (1 - arrival))
+        if elapsed < arrivalDuration {
+            let arrival = arrival.value(at: elapsed / arrivalDuration)
+            return Pose(opacity: min(1, elapsed / 0.05), scale: 0.6 + 0.54 * arrival,
+                        offsetY: 6 * (1 - arrival))
         }
-        let settle = settle.value(at: (progress - 0.55) / 0.45)
-        return Pose(opacity: 1, scale: 1 + 0.1 * (1 - settle), offsetY: 0)
+        let settle = settle.value(at: (elapsed - arrivalDuration) / (duration - arrivalDuration))
+        return Pose(opacity: 1, scale: 1 + 0.14 * (1 - settle), offsetY: 0)
+    }
+
+    static func burst(at progress: Double, reduceMotion: Bool = false) -> Burst {
+        let elapsed = min(1, max(0, progress)) * duration - arrivalDuration
+        guard !reduceMotion, elapsed >= 0, elapsed < 0.15 else {
+            return Burst(opacity: 0, travel: 0)
+        }
+        let travel = elapsed / 0.15
+        return Burst(opacity: 1 - travel, travel: travel)
     }
 
     mutating func update(expanded: Bool, contentVisibility: Double, elapsed: TimeInterval = 0) {
@@ -55,7 +72,7 @@ struct BuddyEntranceMotion {
         // separate entrance after the panel opens.
         revealed = revealed || contentVisibility >= 0.5
         guard revealed, progress < 1, elapsed.isFinite, elapsed > 0 else { return }
-        elapsedTime = min(delay + duration, elapsedTime + elapsed)
-        progress = min(1, max(0, (elapsedTime - delay) / duration))
+        elapsedTime = min(delay + Self.duration, elapsedTime + elapsed)
+        progress = min(1, max(0, (elapsedTime - delay) / Self.duration))
     }
 }
